@@ -1,0 +1,11 @@
+# 秘密情報を含む可能性のあるファイル(念のため。現状は該当ファイルなし)
+.env
+.env.local
+.env.*.local
+
+# OS・エディタが自動生成するファイル
+.DS_Store
+Thumbs.db
+
+# Claude Codeのローカル設定(このPC固有のツール設定。アプリの動作には無関係)
+.claude/

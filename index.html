@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>🏀 WILD CATS活動管理アプリ(プロトタイプ)</title>
+<link rel="icon" href="assets/logo.png">
+
+<!-- ============================================================
+     外部ライブラリ(CDN読み込み・ビルド不要)
+     - Tailwind CSS: デザイン用ユーティリティCSS
+     - Alpine.js  : 軽量なUI状態管理(React/Vueのミニ版)
+     - Supabase JS SDK: 認証・データベース接続(2026-08-28、フェーズ2で追加)
+     ============================================================ -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  [x-cloak] { display: none !important; }
+  body {
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  .tap-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .tap-btn:active { transform: scale(0.96); }
+</style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 min-h-screen" x-data="app()" x-cloak>
+
+<!-- ============================================================
+     画面A: ログイン / 新規登録(未ログイン時のみ表示)
+     ============================================================ -->
+<div x-show="!currentUser" class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-sm">
+
+    <div class="text-center mb-6">
+      <img src="assets/logo.png" alt="WILD CATSロゴ" class="h-20 w-auto mx-auto mb-2 object-contain rounded-lg">
+      <h1 class="text-xl font-bold text-slate-800">WILD CATS活動管理アプリ</h1>
+      <p class="text-sm text-slate-500 mt-1">プロトタイプ版(デモデータで動作)</p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-6">
+
+      <!-- タブ切替: ログイン / 新規登録 -->
+      <div class="flex mb-5 bg-slate-100 rounded-xl p-1">
+        <button type="button" @click="authView='login'"
+          :class="authView==='login' ? 'bg-white shadow text-violet-800' : 'text-slate-500'"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition tap-btn">ログイン</button>
+        <button type="button" @click="authView='signup'"
+          :class="authView==='signup' ? 'bg-white shadow text-violet-800' : 'text-slate-500'"
+          class="flex-1 py-2 rounded-lg text-sm font-semibold transition tap-btn">新規登録</button>
+      </div>
+
+      <!-- --- ログインフォーム --- -->
+      <form x-show="authView==='login'" @submit.prevent="login()" class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500">メールアドレス</label>
+          <input type="email" x-model="loginEmail" required autocomplete="email" name="email"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500">パスワード</label>
+          <input type="password" x-model="loginPassword" required autocomplete="current-password" name="password"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+        <p x-show="loginError" x-text="loginError" class="text-xs text-red-500"></p>
+
+        <button type="submit"
+          class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
+          ログイン
+        </button>
+
+        <button type="button" @click="googleLoginMock()"
+          class="tap-btn w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
+          <span>🔵</span> Googleでログイン
+        </button>
+      </form>
+
+      <!-- --- 新規登録フォーム --- -->
+      <form x-show="authView==='signup'" @submit.prevent="signup()" class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500">お名前</label>
+          <input type="text" x-model="signupName" required
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500">メールアドレス</label>
+          <input type="email" x-model="signupEmail" required autocomplete="email" name="new-email"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500">パスワード</label>
+          <input type="password" x-model="signupPassword" required autocomplete="new-password" name="new-password"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-slate-500">ご家族の情報(配車調整に使用します)</label>
+          <p class="text-[11px] text-slate-400 mt-0.5 mb-2">保護者・選手・ご兄弟(クラブ非所属の同乗者)に分けて登録できます。試合に同行する可能性のある方はあわせて登録しておくと、配車調整がスムーズになります。</p>
+
+          <!-- 保護者 -->
+          <p class="text-xs font-semibold text-slate-600 mt-2 mb-1">👤 保護者</p>
+          <div class="space-y-1.5">
+            <template x-for="item in signupFamilyByCategory('guardian')" :key="item.idx">
+              <div class="flex gap-1.5 items-center">
+                <select x-model="signupFamily[item.idx].relation" class="w-20 border border-slate-300 rounded-lg px-1.5 py-2 text-xs">
+                  <option value="父">父</option>
+                  <option value="母">母</option>
+                  <option value="その他保護者">その他</option>
+                </select>
+                <input type="text" x-model="signupFamily[item.idx].name" placeholder="氏名" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <button type="button" @click="signupFamily.splice(item.idx,1)" class="tap-btn text-slate-400 hover:text-red-500 text-sm px-1">×</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="signupFamily.push({relation:'父',name:'',number:''})" class="tap-btn mt-1 text-xs font-semibold text-violet-800">+ 保護者を追加</button>
+
+          <!-- 選手 -->
+          <p class="text-xs font-semibold text-slate-600 mt-3 mb-1">🏀 選手(お子様・クラブ所属)</p>
+          <div class="space-y-1.5">
+            <template x-for="item in signupFamilyByCategory('player')" :key="item.idx">
+              <div class="flex gap-1.5 items-center">
+                <span class="w-14 text-center text-[11px] text-slate-400">選手</span>
+                <input type="text" x-model="signupFamily[item.idx].name" placeholder="氏名" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <input type="number" x-model.number="signupFamily[item.idx].number" placeholder="背番号" class="w-14 border border-slate-300 rounded-lg px-1.5 py-2 text-xs">
+                <button type="button" x-show="signupFamilyByCategory('player').length>1" @click="signupFamily.splice(item.idx,1)" class="tap-btn text-slate-400 hover:text-red-500 text-sm px-1">×</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="signupFamily.push({relation:'選手',name:'',number:''})" class="tap-btn mt-1 text-xs font-semibold text-violet-800">+ 選手を追加</button>
+
+          <!-- 家族同乗者(クラブ非所属) -->
+          <p class="text-xs font-semibold text-slate-600 mt-3 mb-1">🚗 ご兄弟など(クラブ非所属の同乗者・任意)</p>
+          <p class="text-[11px] text-slate-400 mb-1">配車で一緒に乗せたい、クラブに入っていないご兄弟などがいれば登録できます(不要であれば空欄のままで構いません)。</p>
+          <div class="space-y-1.5">
+            <template x-for="item in signupFamilyByCategory('rider')" :key="item.idx">
+              <div class="flex gap-1.5 items-center">
+                <select x-model="signupFamily[item.idx].relation" class="w-20 border border-slate-300 rounded-lg px-1.5 py-2 text-xs">
+                  <option value="兄">兄</option>
+                  <option value="姉">姉</option>
+                  <option value="弟">弟</option>
+                  <option value="妹">妹</option>
+                  <option value="その他">その他</option>
+                </select>
+                <input type="text" x-model="signupFamily[item.idx].name" placeholder="氏名" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <button type="button" @click="signupFamily.splice(item.idx,1)" class="tap-btn text-slate-400 hover:text-red-500 text-sm px-1">×</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="signupFamily.push({relation:'弟',name:'',number:''})" class="tap-btn mt-1 text-xs font-semibold text-violet-800">+ 同乗者を追加</button>
+        </div>
+
+        <p x-show="signupMessage" x-text="signupMessage" class="text-xs text-emerald-600"></p>
+
+        <button type="submit"
+          class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
+          登録する(管理者の承認後にログイン可能)
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================
+     画面B: ログイン後のメインアプリ
+     ============================================================ -->
+<div x-show="currentUser" class="min-h-screen pb-20 md:pb-0">
+
+  <!-- ヘッダー -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 shrink-0">
+        <img src="assets/logo.png" alt="WILD CATSロゴ" class="h-9 w-auto object-contain rounded">
+        <!-- PC用ナビ(md以上)が表示される幅では、タイトル文字とナビが場所を取り合わないよう、
+             タイトルは「まだナビが出ない狭い範囲(sm〜md未満)」でのみ表示する -->
+        <span class="font-bold text-slate-800 hidden sm:inline md:hidden whitespace-nowrap">WILD CATS活動管理アプリ</span>
+      </div>
+
+      <!-- PC/タブレット用ナビ(幅が足りない場合は折り返さず横スクロール)
+           md〜lg未満は7個のタブ全部が入りきらず overflow-x-auto で見切れて(スクロールしないと見えなく)しまうため、
+           その範囲だけ余白・文字を小さくして詰める。lg以上は通常サイズに戻す。 -->
+      <nav class="hidden md:flex items-center gap-0.5 lg:gap-1 min-w-0 overflow-x-auto">
+        <template x-for="tab in visibleTabs" :key="tab.id">
+          <button @click="activeTab = tab.id"
+            :class="activeTab===tab.id ? 'bg-violet-100 text-violet-800' : 'text-slate-500 hover:bg-slate-100'"
+            class="tap-btn px-2 lg:px-3 py-2 rounded-lg text-xs lg:text-sm font-semibold flex items-center gap-0.5 lg:gap-1 transition whitespace-nowrap">
+            <span x-text="tab.icon"></span><span x-text="tab.label"></span>
+          </button>
+        </template>
+      </nav>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- スマホ用: 管理画面はボトムナビに入りきらないため、ここにも入口を用意 -->
+        <button x-show="isAdmin" @click="activeTab='admin'" class="tap-btn md:hidden text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0"
+          :class="activeTab==='admin' ? 'bg-violet-100' : ''">⚙️</button>
+        <div class="text-right hidden sm:block">
+          <p class="text-sm font-semibold leading-tight whitespace-nowrap" x-text="currentUser?.name"></p>
+          <p class="text-[11px] leading-tight whitespace-nowrap" :class="currentUser?.role==='admin' ? 'text-violet-700' : 'text-slate-400'"
+             x-text="currentUser?.role==='admin' ? '管理者' : 'メンバー'"></p>
+        </div>
+        <button @click="logout()" class="tap-btn text-xs font-semibold text-slate-400 hover:text-red-500 border border-slate-200 rounded-lg px-3 py-2 shrink-0 whitespace-nowrap">ログアウト</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-5 space-y-5">
+
+    <!-- ---------------- 緊急連絡バナー ---------------- -->
+    <template x-for="a in announcements.filter(a=>a.urgent)" :key="a.id">
+      <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm flex items-start gap-2">
+        <span>🚨</span>
+        <div>
+          <p class="font-bold" x-text="a.title"></p>
+          <p x-text="a.body"></p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================= ホーム ================= -->
+    <section x-show="activeTab==='home'" class="space-y-5">
+      <!-- ライブ配信中バナー -->
+      <template x-for="g in liveGames" :key="'livebanner_'+g.id">
+        <button @click="activeTab='results'" type="button"
+          class="tap-btn w-full bg-red-500 text-white rounded-xl px-4 py-3 text-sm flex items-center justify-between">
+          <span class="font-bold flex items-center gap-2">
+            <span class="relative flex h-2.5 w-2.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+            </span>
+            ただいまライブ配信中: vs <span x-text="g.opponent"></span>
+          </span>
+          <span class="text-xs underline whitespace-nowrap">見る →</span>
+        </button>
+      </template>
+
+      <!-- クイックアクセス -->
+      <div class="grid grid-cols-2 gap-3">
+        <button @click="goToVideoMenu()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+          <span class="text-2xl">🎥</span>
+          <span class="text-sm font-bold text-slate-800">動画・ライブ配信</span>
+        </button>
+        <button @click="showBylawsModal=true" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+          <span class="text-2xl">📜</span>
+          <span class="text-sm font-bold text-slate-800">クラブ規約</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-bold text-slate-800 flex items-center gap-1">📢 お知らせ</h2>
+        </div>
+        <div class="space-y-3">
+          <template x-for="a in announcements" :key="a.id">
+            <div class="border-l-4 pl-3 py-1.5" :class="a.urgent ? 'border-red-400' : 'border-violet-400'">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span x-show="a.category" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500" x-text="a.category"></span>
+                <p class="text-xs text-slate-400" x-text="a.date"></p>
+              </div>
+              <p class="font-semibold text-sm mt-0.5" x-text="a.title"></p>
+              <p class="text-sm text-slate-600 whitespace-pre-line" x-text="a.body"></p>
+              <a x-show="a.linkUrl" :href="a.linkUrl" target="_blank"
+                class="tap-btn inline-block mt-1.5 text-xs font-semibold text-violet-800 underline" x-text="'🔗 ' + (a.linkLabel || 'リンクを開く')"></a>
+            </div>
+          </template>
+          <p x-show="announcements.length===0" class="text-sm text-slate-400">お知らせはまだありません。</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-1">🗓️ 直近の予定</h2>
+        <div class="space-y-2">
+          <template x-for="ev in agendaEvents.slice(0,3)" :key="ev.date">
+            <div class="bg-slate-50 rounded-lg px-3 py-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-semibold" x-text="ev.dayType + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
+                  <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '')"></p>
+                </div>
+                <span x-show="ev.dayType!=='練習'" class="text-xs font-bold" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
+              </div>
+              <p x-show="ev.dayType==='練習'" class="text-[11px] mt-1" :class="absenteeNames(ev).length ? 'text-red-500' : 'text-slate-400'">
+                欠席: <span x-text="absenteeNames(ev).length ? absenteeNames(ev).join('、') : 'なし'"></span>
+              </p>
+            </div>
+          </template>
+          <p x-show="agendaEvents.length===0" class="text-sm text-slate-400">予定はまだありません。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= スケジュール(カレンダー・当番) ================= -->
+    <section x-show="activeTab==='schedule'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-bold text-lg">🗓️ スケジュール・当番</h2>
+        <p x-show="isAdmin" class="text-[11px] text-slate-400">日付タップで編集</p>
+      </div>
+
+      <!-- 月間カレンダー -->
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <button @click="prevMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">‹</button>
+          <p class="font-bold text-base" x-text="calendarYear + '年' + (calendarMonth+1) + '月'"></p>
+          <button @click="nextMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">›</button>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
+          <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+        </div>
+        <div class="grid grid-cols-7 gap-1">
+          <template x-for="cell in calendarCells" :key="cell.date">
+            <button @click="openDayModal(cell.date)"
+              class="tap-btn text-left rounded-lg p-1 border min-h-[60px] sm:min-h-[84px] flex flex-col gap-0.5 overflow-hidden"
+              :class="[cell.inMonth ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-50 opacity-40', cell.date===todayStr ? 'ring-2 ring-violet-600' : '']">
+              <span class="text-[11px] font-bold" :class="cell.dow===0 ? 'text-red-400' : cell.dow===6 ? 'text-blue-400' : 'text-slate-500'" x-text="cell.d"></span>
+              <span x-show="cell.day && cell.day.duty" class="text-[9px] leading-tight rounded px-1 py-0.5 bg-teal-500 text-white truncate" x-text="cell.day && cell.day.duty"></span>
+              <span x-show="cell.day && cell.day.dayType" class="text-[9px] leading-tight rounded px-1 py-0.5 text-white truncate" :class="dayTypeColor(cell.day && cell.day.dayType)" x-text="cell.day && cell.day.dayType"></span>
+              <span x-show="cell.day && cell.day.memo" class="text-[9px] leading-tight text-slate-400 truncate" x-text="cell.day && cell.day.memo"></span>
+            </button>
+          </template>
+        </div>
+
+        <!-- 凡例 -->
+        <div class="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] text-slate-400">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-teal-500 inline-block"></span>当番</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-400 inline-block"></span>練習</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-red-500 inline-block"></span>公式戦</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-fuchsia-500 inline-block"></span>カップ戦</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-500 inline-block"></span>練習試合</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-slate-400 inline-block"></span>休み</span>
+        </div>
+      </div>
+
+      <!-- 出欠回答が必要な予定 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-3">📋 予定への出欠回答</h3>
+        <div class="space-y-3">
+          <template x-for="ev in agendaEvents" :key="ev.date">
+            <div class="border border-slate-100 rounded-xl p-3">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-semibold text-sm" x-text="ev.dayType + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
+              </div>
+              <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '') + (ev.place ? ' ・会場📍' + ev.place : '')"></p>
+              <p class="text-xs text-slate-400 mb-2" x-show="ev.memo" x-text="ev.memo"></p>
+              <div class="flex flex-wrap gap-x-3 gap-y-1 mb-2" x-show="ev.materials && ev.materials.length">
+                <template x-for="(mat, mi) in ev.materials" :key="mi">
+                  <a :href="mat.url" target="_blank" class="text-[11px] text-violet-700 underline" x-text="'📎 ' + (mat.label || ('資料' + (mi+1)))"></a>
+                </template>
+              </div>
+              <!-- 練習: 全員参加が前提のため「欠席」だけを申告する -->
+              <template x-if="ev.dayType==='練習'">
+                <div>
+                  <button @click="toggleMyAbsence(ev)" class="tap-btn w-full py-2 rounded-lg text-xs font-bold border"
+                    :class="myEventAttendance(ev)==='no' ? 'bg-red-400 text-white border-red-400' : 'border-slate-200 text-slate-500'"
+                    x-text="myEventAttendance(ev)==='no' ? '❌ 欠席を取り消す' : '欠席する場合はタップ'"></button>
+                  <p class="text-[11px] text-slate-400 mt-2">
+                    欠席: <span x-text="absenteeNames(ev).length ? absenteeNames(ev).join('、') : 'なし'"></span>
+                  </p>
+                </div>
+              </template>
+              <!-- 公式戦・カップ戦・練習試合: 参加/不参加/未定の3択 -->
+              <template x-if="ev.dayType!=='練習'">
+                <div>
+                  <div class="flex gap-2">
+                    <button @click="setMyEventAttendance(ev,'yes')" class="tap-btn flex-1 py-2 rounded-lg text-xs font-bold border"
+                      :class="myEventAttendance(ev)==='yes' ? 'bg-emerald-500 text-white border-emerald-500' : 'border-slate-200 text-slate-500'">参加</button>
+                    <button @click="setMyEventAttendance(ev,'no')" class="tap-btn flex-1 py-2 rounded-lg text-xs font-bold border"
+                      :class="myEventAttendance(ev)==='no' ? 'bg-red-400 text-white border-red-400' : 'border-slate-200 text-slate-500'">不参加</button>
+                    <button @click="setMyEventAttendance(ev,'undecided')" class="tap-btn flex-1 py-2 rounded-lg text-xs font-bold border"
+                      :class="myEventAttendance(ev)==='undecided' ? 'bg-slate-400 text-white border-slate-400' : 'border-slate-200 text-slate-500'">未定</button>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-2" x-text="eventAttendanceSummary(ev)"></p>
+                </div>
+              </template>
+
+              <!-- 試合関係の予定には配車の状況もその場で表示 -->
+              <div x-show="ev.opponents.length" class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
+                  <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(ev)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
+                    x-text="myCarpoolStatusForDay(ev)"></span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1"
+                  x-text="'配車可能 ' + carpoolCountsForDay(ev).canDrive + '家族 / 配車が必要 ' + carpoolCountsForDay(ev).needRide + '家族(回答 ' + carpoolCountsForDay(ev).total + '家族)'"></p>
+                <button @click="goToCarpool(ev.date)" class="tap-btn text-[11px] text-violet-800 font-semibold mt-1.5">配車の詳細・回答はこちら →</button>
+              </div>
+            </div>
+          </template>
+          <p x-show="agendaEvents.length===0" class="text-sm text-slate-400 text-center py-6">出欠が必要な予定はまだありません。</p>
+        </div>
+      </div>
+
+      <!-- 一括取り込み(管理者のみ) -->
+      <div x-show="isAdmin" class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-2">📥 カレンダーの一括取り込み</h3>
+        <p class="text-xs text-slate-400 mb-2">1行につき1日分、<b>日付,当番,種類(練習/公式戦/カップ戦/練習試合/休み),会場,集合場所,集合時間,メモ</b> のカンマ区切りで貼り付けてください。</p>
+        <textarea x-model="csvImportText" rows="4" placeholder="例)&#10;2026-09-20,浦辻,公式戦,市民体育館,学校駐車場,09:30,秋季大会予選"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-600"></textarea>
+        <button @click="importScheduleCSV()" class="tap-btn mt-2 bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-lg">取り込む</button>
+        <p x-show="csvImportMessage" x-text="csvImportMessage" class="text-xs text-emerald-600 mt-2"></p>
+      </div>
+    </section>
+
+    <!-- ================= 配車調整(試合ごと・家族単位) ================= -->
+    <section x-show="activeTab==='carpool'" class="space-y-4">
+      <h2 class="font-bold text-lg">🚗 配車調整</h2>
+
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <label class="text-xs font-medium text-slate-500">対象の日程を選択</label>
+        <select x-model="carpoolEventKey" @change="onCarpoolEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
+          <option value="">-- 日程を選択 --</option>
+          <template x-for="ev in gameAgendaEvents" :key="ev.date">
+            <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
+          </template>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">配車はカップ戦などで対戦相手が複数あっても、日程ごとに1回だけ回答します。</p>
+      </div>
+
+      <template x-if="carpoolEvent">
+        <div class="space-y-4">
+          <!-- わが家の回答 -->
+          <div class="bg-white rounded-2xl shadow-sm p-4">
+            <h3 class="font-bold text-sm mb-1">🏠 わが家(<span x-text="currentUser?.name"></span>)の回答</h3>
+            <p class="text-xs text-slate-400 mb-3">配車の可否と、実際に参加するご家族(選手・きょうだいなど)を選んでください。</p>
+
+            <label class="text-xs font-medium text-slate-500">配車</label>
+            <div class="space-y-1.5 mt-1 mb-3">
+              <template x-for="opt in carpoolStatusOptions" :key="opt.value">
+                <button @click="myCarpoolDraft.status=opt.value" type="button"
+                  class="tap-btn w-full text-left px-3 py-2.5 rounded-lg border flex flex-col"
+                  :class="myCarpoolDraft.status===opt.value ? opt.activeClass + ' text-white' : 'border-slate-200 text-slate-600'">
+                  <span class="text-xs font-bold" x-text="opt.label"></span>
+                  <span class="text-[10px]" :class="myCarpoolDraft.status===opt.value ? 'text-white/80' : 'text-slate-400'" x-text="opt.desc"></span>
+                </button>
+              </template>
+            </div>
+
+            <div x-show="myCarpoolDraft.status==='can_drive' || myCarpoolDraft.status==='can_drive_flex'" class="mb-3">
+              <label class="text-xs font-medium text-slate-500">他のご家族を何人乗せられますか(自分の家族分を除く人数)</label>
+              <input type="number" min="0" x-model.number="myCarpoolDraft.capacity"
+                class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            </div>
+
+            <div x-show="myCarpoolDraft.status" class="mb-3">
+              <label class="text-xs font-medium text-slate-500">実際に参加するご家族(タップで選択/解除。選手だけでなく、きょうだいなど同乗者も選べます)</label>
+              <div class="flex flex-wrap gap-2 mt-1">
+                <template x-for="fm in myFamilyMembersForCarpool" :key="fm.id">
+                  <button type="button" @click="toggleMyCarpoolRider(fm.id)"
+                    class="tap-btn text-xs font-semibold px-3 py-2 rounded-full border-2"
+                    :class="myCarpoolDraft.riders.includes(fm.id) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-500 border-slate-200'">
+                    <span x-text="fm.name"></span>
+                    <span class="opacity-70" x-text="'(' + fm.relation + ')'"></span>
+                  </button>
+                </template>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1" x-text="myCarpoolDraft.riders.length + '人が参加します'"></p>
+            </div>
+
+            <button @click="saveMyCarpoolResponse()" class="tap-btn w-full bg-violet-700 text-white font-semibold py-2.5 rounded-lg text-sm">回答を保存</button>
+            <p x-show="carpoolSavedMessage" x-text="carpoolSavedMessage" class="text-xs text-emerald-600 mt-2 text-center"></p>
+          </div>
+
+          <!-- 配車管理者向け: 組み立て(①乗せたい人をタップ→②車をタップ、で割り当て。選手・家族同乗者を個人単位で扱う) -->
+          <div x-show="isCarpoolManager" class="bg-white rounded-2xl shadow-sm p-4">
+            <h3 class="font-bold text-sm mb-1">🧩 配車を組む(配車管理者)</h3>
+            <p class="text-[11px] text-slate-400 mb-3">① 下の「乗せたい人」を必要な人数だけタップして選択 → ② 乗せる車をタップ、で選んだ全員をまとめて割り当てできます。乗車可能人数を超える場合は割り当てられません。1人ずつ別々の車に乗せることもできます。</p>
+
+            <!-- ① 未配車の人(家庭ごとにまとめて表示、複数人をタップして同時に選択できる) -->
+            <p class="text-xs font-semibold text-slate-500 mb-2">🙋 乗せたい人を選ぶ(複数選択可)</p>
+            <div class="space-y-2 mb-2">
+              <template x-for="fam in carpoolNeedRideFamilies.filter(f => f.unassignedRiders.length > 0)" :key="fam.memberId">
+                <div>
+                  <p class="text-[11px] text-slate-400 mb-1" x-text="fam.name + '家'"></p>
+                  <div class="flex flex-wrap gap-2">
+                    <template x-for="rider in fam.unassignedRiders" :key="rider.personId">
+                      <button @click="toggleCarpoolSelection(rider.personId)" type="button"
+                        class="tap-btn text-xs font-semibold px-3 py-2 rounded-full border-2"
+                        :class="carpoolSelectedRiders.includes(rider.personId) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-700 border-slate-200'">
+                        <span x-text="rider.name"></span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              <!-- 登録家族に属さない、今回だけの同乗者(イレギュラー対応) -->
+              <div x-show="carpoolUnassignedSpotRiders.length > 0">
+                <p class="text-[11px] text-slate-400 mb-1">🧩 スポット同乗者</p>
+                <div class="flex flex-wrap gap-2">
+                  <template x-for="rider in carpoolUnassignedSpotRiders" :key="rider.id">
+                    <span class="rounded-full border-2 overflow-hidden flex items-stretch"
+                      :class="carpoolSelectedRiders.includes(rider.id) ? 'border-violet-600' : 'border-slate-200'">
+                      <button @click="toggleCarpoolSelection(rider.id)" type="button"
+                        class="tap-btn text-xs font-semibold px-3 py-2"
+                        :class="carpoolSelectedRiders.includes(rider.id) ? 'bg-violet-600 text-white' : 'bg-white text-slate-700'">
+                        <span x-text="rider.name"></span>
+                      </button>
+                      <span @click="removeCarpoolSpotRider(rider.id)" class="tap-btn text-slate-400 hover:text-red-500 text-xs px-2 flex items-center bg-white">×</span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+              <p x-show="carpoolUnassignedRiderCount===0" class="text-xs text-slate-400 py-2">未配車の方はいません。全員の配車が完了しています🎉</p>
+            </div>
+            <p class="text-[11px] font-bold text-violet-700 mb-1" x-show="carpoolSelectedRiders.length">
+              ↓ 選択中(<span x-text="carpoolSelectedRiders.length"></span>人): <span x-text="carpoolSelectedRidersLabel"></span> — 下の車をタップしてまとめて乗せてください
+            </p>
+            <p class="text-[11px] font-bold text-red-500 mb-3" x-show="carpoolFullMessage" x-text="carpoolFullMessage"></p>
+
+            <!-- 登録家族以外の方を今回だけ同乗させたい場合(イレギュラー対応) -->
+            <div class="mb-4 pt-2 border-t border-slate-100">
+              <p class="text-[11px] font-semibold text-slate-500 mb-1">＋ 登録家族以外の方をスポットで追加(今回の日程限定)</p>
+              <div class="flex gap-2">
+                <input type="text" x-model="carpoolSpotRiderName" placeholder="お名前(例:友人のお子さん)"
+                  @keydown.enter.prevent="addCarpoolSpotRider()"
+                  class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <button type="button" @click="addCarpoolSpotRider()" class="tap-btn bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg">追加</button>
+              </div>
+            </div>
+
+            <!-- ② 車(座席表として、誰が乗っているか一目でわかる) -->
+            <p class="text-xs font-semibold text-slate-500 mb-2">🚗 車ごとの配車状況</p>
+            <div class="space-y-2 mb-4">
+              <template x-for="drv in carpoolDrivers" :key="drv.memberId">
+                <button type="button" @click="assignSelectedTo(drv.memberId)"
+                  class="tap-btn w-full text-left rounded-xl p-3 border-2 transition"
+                  :class="carpoolSelectedRiders.length ? ((drv.capacity - drv.assigned.length) >= carpoolSelectedRiders.length ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-slate-50') : 'border-slate-100 bg-slate-50'">
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm font-semibold text-slate-800">
+                      🚗 <span x-text="drv.name + '家'"></span>
+                      <span x-show="drv.status==='can_drive_flex'" class="text-[10px] font-normal text-blue-500 ml-1">(別便可)</span>
+                    </p>
+                    <span class="text-xs font-bold" :class="drv.assigned.length > drv.capacity ? 'text-red-500' : 'text-slate-400'"
+                      x-text="drv.assigned.length + ' / ' + drv.capacity + '人'"></span>
+                  </div>
+                  <!-- 座席の視覚表示(1人ずつ、どのご家族の誰かがわかる) -->
+                  <div class="flex flex-wrap gap-1 mt-2">
+                    <template x-for="a in drv.assigned" :key="a.personId">
+                      <span class="bg-white border border-slate-200 text-xs rounded-full px-2 py-1 flex items-center gap-1">
+                        👤 <span x-text="a.name + (a.familyName ? '(' + a.familyName + '家)' : '')"></span>
+                        <span @click.stop="removeCarpoolAssignment(a.personId)" class="tap-btn text-slate-400 hover:text-red-500 font-bold">×</span>
+                      </span>
+                    </template>
+                    <span x-show="drv.assigned.length===0" class="text-[11px] text-slate-400">まだ誰も乗っていません</span>
+                  </div>
+                  <p x-show="carpoolSelectedRiders.length && (drv.capacity - drv.assigned.length) >= carpoolSelectedRiders.length"
+                    class="text-[11px] font-bold text-emerald-600 mt-1.5"
+                    x-text="'タップして' + carpoolSelectedRiders.length + '人まとめて乗せる →'"></p>
+                  <p x-show="carpoolSelectedRiders.length && (drv.capacity - drv.assigned.length) < carpoolSelectedRiders.length" class="text-[11px] text-slate-400 mt-1.5">空きが足りないため乗せられません</p>
+                </button>
+              </template>
+              <p x-show="carpoolDrivers.length===0" class="text-xs text-slate-400">車を出せると回答した家族はまだいません。</p>
+            </div>
+
+            <p class="text-xs font-semibold text-slate-500 mb-2">🚶 自分たちで移動するご家族(別便希望)</p>
+            <div class="space-y-1">
+              <template x-for="sep in carpoolSeparate" :key="sep.memberId">
+                <p class="text-sm bg-slate-50 rounded-lg px-3 py-2" x-text="sep.name + '家(' + sep.riders.join('・') + ')'"></p>
+              </template>
+              <p x-show="carpoolSeparate.length===0" class="text-xs text-slate-400">該当するご家族はいません。</p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <p x-show="!carpoolEvent" class="text-sm text-slate-400 text-center py-10">上で日程を選択してください。</p>
+    </section>
+
+    <!-- ================= 試合結果 ================= -->
+    <section x-show="activeTab==='results'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-bold text-lg">🏆 試合結果</h2>
+        <button x-show="isAdmin" @click="openGameModal()" class="tap-btn bg-violet-700 text-white text-sm font-semibold px-3 py-2 rounded-lg">+ 試合を追加</button>
+      </div>
+
+      <!-- 動画・ライブ配信メニュー(Band風にまとめて一覧・すぐ視聴) -->
+      <div id="video-menu" class="bg-white rounded-2xl shadow-sm p-4">
+        <h3 class="font-bold text-sm mb-1">🎥 動画・ライブ配信</h3>
+        <p class="text-[11px] text-slate-400 mb-3">配信の開始・終了は「配信管理」権限を持つ方が操作できます。会場にいる配信担当の方がスマホでライブ配信を始めてください。</p>
+        <div class="space-y-2">
+          <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="'media_'+g.id">
+            <div class="bg-slate-50 rounded-lg px-3 py-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <p class="text-sm font-semibold flex items-center gap-1.5">
+                    <span x-show="g.isLive && g.liveUrl" class="text-red-500 text-[10px] font-bold">🔴 LIVE</span>
+                    <span x-text="'vs ' + g.opponent"></span>
+                  </p>
+                  <p class="text-xs text-slate-400" x-text="g.date"></p>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                  <button x-show="isLiveManager && g.isLive && g.liveUrl" @click="toggleGameLive(g.id)" type="button"
+                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-red-500 text-white whitespace-nowrap">⏹ 配信を終了</button>
+                  <button x-show="isLiveManager && !g.isLive && g.liveUrl" @click="toggleGameLive(g.id)" type="button"
+                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white whitespace-nowrap">🔴 配信を開始</button>
+                  <button x-show="isLiveManager && !g.liveUrl" @click="openLiveSetupModal(g.id)" type="button"
+                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white whitespace-nowrap">🔴 配信URLを設定</button>
+                  <!-- 配信URLの投稿・編集・削除は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
+                  <div class="flex gap-1" x-show="isLiveManager && g.liveUrl">
+                    <button @click="openLiveSetupModal(g.id)" type="button" class="tap-btn text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">✏️ URL編集</button>
+                    <button @click="clearLiveUrl(g.id)" type="button" class="tap-btn text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">🗑 削除</button>
+                  </div>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-2" x-show="(g.isLive && g.liveUrl) || g.videoUrl || g.photoUrl">
+                <button x-show="g.isLive && g.liveUrl" @click="jumpToGameMedia(g.id)" type="button"
+                  class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">見る</button>
+                <a x-show="g.videoUrl" :href="g.videoUrl" target="_blank" class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">▶ 動画</a>
+                <a x-show="g.photoUrl" :href="g.photoUrl" target="_blank" class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">🖼 写真</a>
+              </div>
+            </div>
+          </template>
+          <p x-show="games.length===0" class="text-sm text-slate-400 text-center py-4">試合がまだ登録されていません。</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="g.id">
+          <div class="bg-white rounded-2xl shadow-sm p-4" :id="'game_'+g.id">
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-xs text-slate-400" x-text="g.date + '  📍' + g.place + (g.roundLabel ? '  ・' + g.roundLabel : '')"></p>
+                <p class="font-bold mt-1">自チーム <span class="text-violet-800" x-text="teamScore(g)"></span>
+                  - <span class="text-slate-500" x-text="oppScore(g)"></span> <span x-text="g.opponent"></span></p>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                <div class="flex gap-2" x-show="isAdmin">
+                  <button @click="openGameModal(g)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
+                  <button @click="deleteGame(g.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
+                </div>
+                <!-- ライブ配信の開始/終了は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
+                <button x-show="isLiveManager && g.liveUrl" @click="toggleGameLive(g.id)" class="tap-btn text-[11px] font-bold px-2 py-1 rounded-lg whitespace-nowrap"
+                  :class="g.isLive ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'"
+                  x-text="g.isLive ? '🔴 配信終了にする' : '配信を開始する'"></button>
+              </div>
+            </div>
+
+            <!-- ライブ配信 -->
+            <div x-show="g.isLive && g.liveUrl" class="mt-3">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="relative flex h-2.5 w-2.5">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                </span>
+                <span class="text-xs font-bold text-red-500">LIVE配信中</span>
+              </div>
+              <template x-if="isYouTubeUrl(g.liveUrl)">
+                <div class="aspect-video rounded-lg overflow-hidden bg-black">
+                  <iframe :src="youtubeEmbedUrl(g.liveUrl)" class="w-full h-full" frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                </div>
+              </template>
+              <template x-if="!isYouTubeUrl(g.liveUrl)">
+                <a :href="g.liveUrl" target="_blank" class="tap-btn block text-center bg-red-500 text-white text-sm font-bold py-2.5 rounded-lg">🔴 ライブ配信を見る(外部アプリで開きます)</a>
+              </template>
+            </div>
+
+            <!-- クォーター別(電光掲示板風) -->
+            <div class="overflow-x-auto mt-3 bg-slate-900 rounded-xl p-3">
+              <table class="text-xs w-full text-center border-collapse text-white">
+                <thead>
+                  <tr class="text-slate-500 border-b border-slate-700">
+                    <td class="text-left py-1"></td>
+                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1" x-text="'Q'+(i+1)"></td></template>
+                    <td class="font-bold py-1">計</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="text-left py-1.5 font-semibold">自チーム</td>
+                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums" x-text="q.home"></td></template>
+                    <td class="font-black py-1.5 tabular-nums" x-text="teamScore(g)"></td>
+                  </tr>
+                  <tr class="border-t border-slate-800">
+                    <td class="text-left py-1.5 font-semibold text-red-300" x-text="g.opponent"></td>
+                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums text-slate-300" x-text="q.away"></td></template>
+                    <td class="font-black py-1.5 tabular-nums text-red-300" x-text="oppScore(g)"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="flex gap-2 mt-3">
+              <a :href="g.videoUrl||'#'" target="_blank" x-show="g.videoUrl"
+                class="tap-btn flex-1 text-center bg-slate-800 text-white text-xs font-semibold py-2 rounded-lg">▶ 動画を見る</a>
+              <a :href="g.photoUrl||'#'" target="_blank" x-show="g.photoUrl"
+                class="tap-btn flex-1 text-center bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-lg">🖼 写真ギャラリー</a>
+            </div>
+          </div>
+        </template>
+        <p x-show="games.length===0" class="text-sm text-slate-400 text-center py-6">試合結果はまだありません。</p>
+      </div>
+
+      <!-- 選手成績・比較グラフ -->
+      <div class="bg-white rounded-2xl shadow-sm p-4" x-effect="activeTab==='results' && renderPlayerCompareChart()">
+        <h3 class="font-bold text-sm mb-1">📊 選手成績(全試合合計・比較)</h3>
+        <p class="text-xs text-slate-400 mb-3">選手名をタップすると、個人の詳しい成績グラフが見られます。</p>
+        <div class="overflow-x-auto">
+          <canvas id="playerCompareChart" height="220"></canvas>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <template x-for="p in seasonPlayerTotals" :key="p.id">
+            <button @click="openPlayerDetail(p.id)" class="tap-btn text-xs font-semibold bg-slate-100 hover:bg-violet-100 text-slate-700 rounded-full px-3 py-1.5">
+              <span x-text="'#'+p.number+' '+p.name"></span>
+            </button>
+          </template>
+          <p x-show="seasonPlayerTotals.length===0" class="text-xs text-slate-400">選手データがまだありません。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= リアルタイムスタッツ(iPad最適化) ================= -->
+    <section x-show="activeTab==='stats'" class="space-y-4">
+      <h2 class="font-bold text-lg">📊 リアルタイムスタッツ記録</h2>
+
+      <div class="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500">① 日程を選択</label>
+          <select x-model="statsEventKey" @change="onStatsEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
+            <option value="">-- 日程を選択 --</option>
+            <template x-for="ev in gameAgendaEvents" :key="ev.date">
+              <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
+            </template>
+          </select>
+        </div>
+        <div x-show="statsEvent">
+          <label class="text-xs font-medium text-slate-500">② 対戦相手を選択</label>
+          <select x-model="liveGameId" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
+            <option value="">-- 対戦相手を選択 --</option>
+            <template x-for="opp in (statsEvent ? statsEvent.opponents : [])" :key="opp.gameId">
+              <option :value="opp.gameId" x-text="opp.name"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+
+      <template x-if="liveGame">
+        <div class="space-y-4">
+          <!-- スコアボード(電光掲示板風) -->
+          <div class="bg-slate-900 text-white rounded-2xl p-4 sm:p-5">
+            <div class="flex items-center justify-between text-[10px] font-bold tracking-widest text-slate-500 px-1">
+              <span>HOME</span>
+              <span class="bg-slate-800 rounded-full px-2.5 py-0.5 text-slate-300" x-text="'Q' + (currentQuarter+1) + ' / ' + liveGame.quarters.length"></span>
+              <span>AWAY</span>
+            </div>
+            <div class="flex items-center justify-around text-center mt-1">
+              <div class="flex-1 min-w-0">
+                <p class="text-4xl sm:text-5xl font-black tabular-nums" x-text="teamScore(liveGame)"></p>
+                <p class="text-xs text-slate-400 mt-1 truncate">自チーム</p>
+              </div>
+              <div class="text-xl font-bold text-slate-600 px-2">–</div>
+              <div class="flex-1 min-w-0">
+                <p class="text-4xl sm:text-5xl font-black tabular-nums text-red-400" x-text="oppScore(liveGame)"></p>
+                <p class="text-xs text-slate-400 mt-1 truncate" x-text="liveGame.opponent"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 終了済みバナー -->
+          <div x-show="liveGame.finished" class="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-2">
+            <span>✅ この試合の記録は保存・終了済みです</span>
+            <button x-show="isAdmin" @click="reopenGame()" class="tap-btn text-xs font-bold underline whitespace-nowrap">記録を再開</button>
+          </div>
+
+          <template x-if="!liveGame.finished">
+            <div class="space-y-4">
+              <!-- クォーター選択(スコアボード風のセグメントコントロール) -->
+              <div class="bg-slate-900 rounded-xl p-1.5 flex gap-1.5">
+                <template x-for="(q,i) in liveGame.quarters" :key="i">
+                  <button @click="currentQuarter=i" class="tap-btn flex-1 py-2.5 rounded-lg font-black text-sm transition"
+                    :class="currentQuarter===i ? 'bg-white text-slate-900' : 'text-slate-400'"
+                    x-text="'Q'+(i+1)"></button>
+                </template>
+              </div>
+
+              <!-- 選手選択(ゼッケン番号の丸ボタンをタップして選択) -->
+              <div class="bg-white rounded-2xl shadow-sm p-4">
+                <p class="text-xs font-medium text-slate-500 mb-3">① 選手をタップして選択</p>
+                <div class="grid grid-cols-4 sm:grid-cols-6 gap-x-2 gap-y-3">
+                  <template x-for="p in activePlayers" :key="p.id">
+                    <button @click="selectedPlayerId=p.id" class="tap-btn flex flex-col items-center gap-1">
+                      <span class="w-14 h-14 rounded-full border-2 font-black text-lg flex items-center justify-center transition"
+                        :class="selectedPlayerId===p.id ? 'bg-slate-900 text-white border-slate-900 scale-105' : 'bg-slate-50 text-slate-700 border-slate-200'"
+                        x-text="p.number"></span>
+                      <span class="text-[10px] font-semibold leading-tight text-center max-w-[60px] truncate"
+                        :class="selectedPlayerId===p.id ? 'text-slate-900' : 'text-slate-500'" x-text="p.name"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+
+              <!-- アクション記録 -->
+              <div class="bg-white rounded-2xl shadow-sm p-4">
+                <p class="text-xs font-medium text-slate-500 mb-2">② アクションをタップ(自チーム)</p>
+                <div class="grid grid-cols-3 gap-2">
+                  <button @click="recordShot('fg2',true)" class="tap-btn min-h-[64px] rounded-xl bg-emerald-500 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">2P成功</span><span class="text-[10px] font-normal opacity-90">ゴール成功・2点</span>
+                  </button>
+                  <button @click="recordShot('fg2',false)" class="tap-btn min-h-[64px] rounded-xl bg-emerald-100 text-emerald-700 font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">2P失敗</span><span class="text-[10px] font-normal opacity-80">ゴール失敗(2点狙い)</span>
+                  </button>
+                  <button @click="recordShot('fg3',true)" class="tap-btn min-h-[64px] rounded-xl bg-blue-500 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">3P成功</span><span class="text-[10px] font-normal opacity-90">スリーポイント成功・3点</span>
+                  </button>
+                  <button @click="recordShot('fg3',false)" class="tap-btn min-h-[64px] rounded-xl bg-blue-100 text-blue-700 font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">3P失敗</span><span class="text-[10px] font-normal opacity-80">スリーポイント失敗</span>
+                  </button>
+                  <button @click="recordShot('ft',true)" class="tap-btn min-h-[64px] rounded-xl bg-indigo-500 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">FT成功</span><span class="text-[10px] font-normal opacity-90">フリースロー成功・1点</span>
+                  </button>
+                  <button @click="recordShot('ft',false)" class="tap-btn min-h-[64px] rounded-xl bg-indigo-100 text-indigo-700 font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">FT失敗</span><span class="text-[10px] font-normal opacity-80">フリースロー失敗</span>
+                  </button>
+                  <button @click="recordSimpleStat('ast')" class="tap-btn min-h-[64px] rounded-xl bg-amber-400 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">アシスト</span><span class="text-[10px] font-normal opacity-90">得点につながるパス</span>
+                  </button>
+                  <button @click="recordSimpleStat('reb')" class="tap-btn min-h-[64px] rounded-xl bg-teal-400 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">リバウンド</span><span class="text-[10px] font-normal opacity-90">シュート後のボール確保</span>
+                  </button>
+                  <button @click="recordSimpleStat('foul')" class="tap-btn min-h-[64px] rounded-xl bg-red-400 text-white font-bold flex flex-col items-center justify-center leading-tight gap-0.5">
+                    <span class="text-sm">ファウル</span><span class="text-[10px] font-normal opacity-90">反則</span>
+                  </button>
+                </div>
+                <p x-show="statMessage" x-text="statMessage" class="text-xs text-center text-slate-400 mt-2"></p>
+              </div>
+
+              <!-- 相手チーム加点(簡易) -->
+              <div class="bg-white rounded-2xl shadow-sm p-4">
+                <p class="text-xs font-medium text-slate-500 mb-2">相手チームの得点</p>
+                <div class="grid grid-cols-4 gap-2">
+                  <button @click="addOpponentScore(1)" class="tap-btn min-h-[48px] rounded-xl bg-slate-700 text-white font-bold text-sm">+1</button>
+                  <button @click="addOpponentScore(2)" class="tap-btn min-h-[48px] rounded-xl bg-slate-700 text-white font-bold text-sm">+2</button>
+                  <button @click="addOpponentScore(3)" class="tap-btn min-h-[48px] rounded-xl bg-slate-700 text-white font-bold text-sm">+3</button>
+                  <button @click="undoLastStat()" class="tap-btn min-h-[48px] rounded-xl bg-slate-100 text-slate-600 font-bold text-sm">↩ 取消</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- クォーター別得点(常時表示・分析用・電光掲示板風) -->
+          <div class="bg-slate-900 rounded-2xl shadow-sm p-4 overflow-x-auto">
+            <p class="text-[11px] font-semibold text-slate-500 mb-2 tracking-wide">📈 クォーター別得点</p>
+            <table class="w-full text-xs text-center border-collapse text-white">
+              <thead>
+                <tr class="text-slate-500 border-b border-slate-700">
+                  <td class="text-left py-1.5"></td>
+                  <template x-for="(q,i) in liveGame.quarters" :key="i"><td class="py-1.5" x-text="'Q'+(i+1)"></td></template>
+                  <td class="font-bold py-1.5">計</td>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="text-left py-2 font-semibold">自チーム</td>
+                  <template x-for="(q,i) in liveGame.quarters" :key="i"><td class="py-2 tabular-nums" x-text="q.home"></td></template>
+                  <td class="font-black text-base py-2 tabular-nums" x-text="teamScore(liveGame)"></td>
+                </tr>
+                <tr class="border-t border-slate-800">
+                  <td class="text-left py-2 font-semibold text-red-300" x-text="liveGame.opponent"></td>
+                  <template x-for="(q,i) in liveGame.quarters" :key="i"><td class="py-2 tabular-nums text-slate-300" x-text="q.away"></td></template>
+                  <td class="font-black text-base py-2 tabular-nums text-red-300" x-text="oppScore(liveGame)"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 個人スタッツ集計(ボックススコア風) -->
+          <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <p class="text-xs font-medium text-slate-500 px-4 pt-4 pb-2">個人スタッツ(自動集計)</p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-center border-collapse min-w-[440px]">
+                <thead>
+                  <tr class="bg-slate-900 text-white">
+                    <td class="text-left py-2 pl-4 pr-3 sticky left-0 bg-slate-900">選手</td>
+                    <td class="py-2 px-1.5">PTS</td>
+                    <td class="py-2 px-1.5">AST</td>
+                    <td class="py-2 px-1.5">REB</td>
+                    <td class="py-2 px-1.5">Foul</td>
+                    <td class="py-2 px-1.5">FG</td>
+                    <td class="py-2 px-1.5">3P</td>
+                    <td class="py-2 px-1.5">FT</td>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(p,pi) in players" :key="p.id">
+                    <tr :class="pi%2===0 ? 'bg-white' : 'bg-slate-50'" class="border-b border-slate-100 last:border-0">
+                      <td class="text-left py-2 pl-4 pr-3 font-semibold sticky left-0" :class="pi%2===0 ? 'bg-white' : 'bg-slate-50'" x-text="'#'+p.number+' '+p.name"></td>
+                      <td class="font-black text-violet-800 tabular-nums" x-text="playerStat(liveGame,p.id).pts"></td>
+                      <td class="tabular-nums" x-text="playerStat(liveGame,p.id).ast"></td>
+                      <td class="tabular-nums" x-text="playerStat(liveGame,p.id).reb"></td>
+                      <td class="tabular-nums" x-text="playerStat(liveGame,p.id).foul"></td>
+                      <td class="tabular-nums text-slate-500" x-text="playerStat(liveGame,p.id).fg2m+'/'+playerStat(liveGame,p.id).fg2a"></td>
+                      <td class="tabular-nums text-slate-500" x-text="playerStat(liveGame,p.id).fg3m+'/'+playerStat(liveGame,p.id).fg3a"></td>
+                      <td class="tabular-nums text-slate-500" x-text="playerStat(liveGame,p.id).ftm+'/'+playerStat(liveGame,p.id).fta"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 試合の保存・終了(管理者) -->
+          <button x-show="isAdmin && !liveGame.finished" @click="finishGame()"
+            class="tap-btn w-full bg-slate-900 text-white font-bold py-3 rounded-xl text-sm">🏁 試合を保存して終了</button>
+        </div>
+      </template>
+
+      <p x-show="!liveGame" class="text-sm text-slate-400 text-center py-10">上で試合を選択すると記録画面が表示されます。</p>
+    </section>
+
+    <!-- ================= 会計・帳簿(会計担当者専用) ================= -->
+    <section x-show="activeTab==='finance' && isFinanceManager" class="space-y-4">
+      <h2 class="font-bold text-lg">💰 会計・帳簿</h2>
+
+      <!-- 月切り替え -->
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between">
+          <button @click="prevFeeMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">‹</button>
+          <p class="font-bold text-base" x-text="feeYear + '年' + (feeMonth+1) + '月'"></p>
+          <button @click="nextFeeMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">›</button>
+        </div>
+      </div>
+
+      <!-- 収支サマリー -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-white rounded-2xl shadow-sm p-3 text-center">
+          <p class="text-[11px] text-slate-400">今月の収入</p>
+          <p class="text-lg font-black text-emerald-600" x-text="'¥'+monthIncome.toLocaleString()"></p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm p-3 text-center">
+          <p class="text-[11px] text-slate-400">今月の支出</p>
+          <p class="text-lg font-black text-red-500" x-text="'¥'+monthExpense.toLocaleString()"></p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm p-3 text-center">
+          <p class="text-[11px] text-slate-400">今月の収支</p>
+          <p class="text-lg font-black" :class="monthIncome-monthExpense>=0 ? 'text-slate-800' : 'text-red-500'" x-text="(monthIncome-monthExpense>=0?'+':'')+'¥'+(monthIncome-monthExpense).toLocaleString()"></p>
+        </div>
+        <div class="bg-slate-900 rounded-2xl shadow-sm p-3 text-center">
+          <p class="text-[11px] text-slate-400">累計残高</p>
+          <p class="text-lg font-black text-white" x-text="'¥'+totalBalance.toLocaleString()"></p>
+        </div>
+      </div>
+
+      <!-- 家族ごとの会費納付状況 -->
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">📋 今月の会費納付状況</h3>
+          <div class="flex items-center gap-1">
+            <span class="text-[11px] text-slate-400 whitespace-nowrap">月会費</span>
+            <input type="number" min="0" x-model.number="financeSettings.monthlyFee" @change="updateMonthlyFee()" class="w-20 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+            <span class="text-[11px] text-slate-400">円</span>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <template x-for="row in feeRows" :key="row.memberId">
+            <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div>
+                <p class="text-sm font-semibold" x-text="row.name + '家'"></p>
+                <p class="text-[11px] text-slate-400" x-show="row.paid" x-text="row.paidDate + ' 納付・¥' + row.amount.toLocaleString()"></p>
+                <p class="text-[11px] text-red-400" x-show="!row.paid">未納</p>
+              </div>
+              <button x-show="!row.paid" @click="markFeePaid(row.memberId)" class="tap-btn bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">納付済みにする</button>
+              <button x-show="row.paid" @click="unmarkFeePaid(row.memberId)" class="tap-btn bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg">取消</button>
+            </div>
+          </template>
+          <p x-show="feeRows.length===0" class="text-xs text-slate-400">承認済みのメンバーがいません。</p>
+        </div>
+      </div>
+
+      <!-- 帳簿(収入・支出の記録) -->
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <h3 class="font-bold text-sm mb-3">📒 帳簿(収入・支出の記録)</h3>
+
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <button @click="newEntryType='income'; newEntryCategory=financeCategories.income[0]" type="button"
+            class="tap-btn py-2 rounded-lg text-xs font-bold border"
+            :class="newEntryType==='income' ? 'bg-emerald-500 text-white border-emerald-500' : 'border-slate-200 text-slate-500'">＋ 収入を記録</button>
+          <button @click="newEntryType='expense'; newEntryCategory=financeCategories.expense[0]" type="button"
+            class="tap-btn py-2 rounded-lg text-xs font-bold border"
+            :class="newEntryType==='expense' ? 'bg-red-500 text-white border-red-500' : 'border-slate-200 text-slate-500'">− 支出を記録</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input type="date" x-model="newEntryDate" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs">
+          <select x-model="newEntryCategory" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs">
+            <template x-for="c in (newEntryType==='income' ? financeCategories.income : financeCategories.expense)" :key="c">
+              <option :value="c" x-text="c"></option>
+            </template>
+          </select>
+        </div>
+        <div class="flex gap-2 mb-2">
+          <input type="text" x-model="newEntryDescription" placeholder="内容(例:大会参加費・○○様寄付)" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-xs">
+          <input type="number" min="0" x-model.number="newEntryAmount" placeholder="金額" class="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-xs">
+        </div>
+        <button @click="addFinanceEntry()" class="tap-btn w-full bg-slate-800 text-white text-xs font-semibold py-2 rounded-lg">記録に追加</button>
+
+        <div class="overflow-x-auto mt-4">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="text-slate-400 text-left">
+                <td class="pb-1">日付</td>
+                <td class="pb-1">内容</td>
+                <td class="pb-1 text-right">金額</td>
+                <td class="pb-1 text-right">残高</td>
+                <td class="pb-1"></td>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in ledgerRows" :key="row.id">
+                <tr class="border-t border-slate-100">
+                  <td class="py-1.5 whitespace-nowrap text-slate-500" x-text="row.date"></td>
+                  <td class="py-1.5">
+                    <span class="block font-semibold" x-text="row.category"></span>
+                    <span class="block text-[10px] text-slate-400" x-text="row.description"></span>
+                  </td>
+                  <td class="py-1.5 text-right font-bold whitespace-nowrap" :class="row.type==='income' ? 'text-emerald-600' : 'text-red-500'"
+                    x-text="(row.type==='income'?'+':'-') + '¥' + row.amount.toLocaleString()"></td>
+                  <td class="py-1.5 text-right text-slate-500 whitespace-nowrap" x-text="'¥'+row.balance.toLocaleString()"></td>
+                  <td class="py-1.5 text-right"><button @click="deleteFinanceEntry(row.id)" class="tap-btn text-slate-300 hover:text-red-500">×</button></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p x-show="ledgerRows.length===0" class="text-xs text-slate-400 text-center py-6">記録はまだありません。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 管理者ダッシュボード ================= -->
+    <section x-show="activeTab==='admin' && isAdmin" class="space-y-4">
+      <h2 class="font-bold text-lg">⚙️ 管理者ダッシュボード</h2>
+
+      <!-- 新規メンバー承認 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-3">👤 新規登録の承認待ち</h3>
+        <div class="space-y-2">
+          <template x-for="m in pendingMembers" :key="m.id">
+            <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div>
+                <p class="text-sm font-semibold" x-text="m.name"></p>
+                <p class="text-xs text-slate-400" x-text="m.email"></p>
+              </div>
+              <div class="flex gap-2">
+                <button @click="approveMember(m.id)" class="tap-btn bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">承認</button>
+                <button @click="rejectMember(m.id)" class="tap-btn bg-red-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg">却下</button>
+              </div>
+            </div>
+          </template>
+          <p x-show="pendingMembers.length===0" class="text-xs text-slate-400">承認待ちのメンバーはいません。</p>
+        </div>
+      </div>
+
+      <!-- 役割・権限の設定 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">🔑 役割・権限の設定</h3>
+        <p class="text-xs text-slate-400 mb-3">管理者以外にも、配車の組み立て・会費管理・動画/ライブ配信の管理を任せられます。</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-[11px] text-slate-400">
+                <td class="text-left pb-1">メンバー</td>
+                <td class="text-center pb-1">🚗 配車管理</td>
+                <td class="text-center pb-1">💰 会計担当</td>
+                <td class="text-center pb-1">🎥 配信管理</td>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="m in approvedMembers" :key="m.id">
+                <tr class="bg-slate-50">
+                  <td class="rounded-l-lg px-3 py-2" x-text="m.name + (m.role==='admin' ? '(管理者)' : '')"></td>
+                  <td class="text-center">
+                    <input type="checkbox" :checked="m.role==='admin' || m.canManageCarpool" :disabled="m.role==='admin'"
+                      @change="toggleMemberFlag(m.id, 'canManageCarpool', $event.target.checked)">
+                  </td>
+                  <td class="text-center">
+                    <input type="checkbox" :checked="m.role==='admin' || m.canManageFinance" :disabled="m.role==='admin'"
+                      @change="toggleMemberFlag(m.id, 'canManageFinance', $event.target.checked)">
+                  </td>
+                  <td class="rounded-r-lg text-center">
+                    <input type="checkbox" :checked="m.role==='admin' || m.canManageLive" :disabled="m.role==='admin'"
+                      @change="toggleMemberFlag(m.id, 'canManageLive', $event.target.checked)">
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- お知らせ管理 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">📢 お知らせ・緊急連絡の管理</h3>
+          <button @click="openAnnouncementModal()" class="tap-btn bg-violet-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">+ 新規</button>
+        </div>
+        <div class="space-y-2">
+          <template x-for="a in announcements" :key="a.id">
+            <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div>
+                <p class="text-sm font-semibold" x-text="(a.urgent?'🚨 ':'') + a.title"></p>
+                <p class="text-xs text-slate-400" x-text="a.date"></p>
+              </div>
+              <div class="flex gap-2">
+                <button @click="openAnnouncementModal(a)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
+                <button @click="deleteAnnouncement(a.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 選手ロスター管理 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">🏀 選手ロスター管理(スタッツ記録用)</h3>
+        <p class="text-xs text-slate-400 mb-3">卒部・退部した選手も一覧からは削除せず、在籍状態だけを変更してください。過去の試合記録が壊れずに残ります。</p>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <template x-for="p in players" :key="p.id">
+            <span class="text-xs rounded-full pl-3 pr-1 py-1 flex items-center gap-1"
+              :class="(p.status||'active')==='active' ? 'bg-slate-100' : 'bg-slate-50 text-slate-400'">
+              <span x-text="'#'+p.number+' '+p.name"></span>
+              <select class="text-[10px] border-0 bg-transparent" :value="p.status||'active'" @change="setPlayerStatus(p.id, $event.target.value)">
+                <option value="active">在籍中</option>
+                <option value="graduated">卒部</option>
+                <option value="withdrawn">退部</option>
+              </select>
+              <button @click="removePlayer(p.id)" class="tap-btn text-slate-400 hover:text-red-500 px-1">×</button>
+            </span>
+          </template>
+        </div>
+        <div class="flex gap-2">
+          <input type="number" x-model.number="newPlayerNumber" placeholder="背番号" class="w-20 border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          <input type="text" x-model="newPlayerName" placeholder="選手名" class="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm">
+          <button @click="addPlayer()" class="tap-btn bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg">追加</button>
+        </div>
+      </div>
+
+      <!-- 家庭ごとの利用停止・完全削除 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">🚫 利用停止・完全削除</h3>
+        <p class="text-xs text-slate-400 mb-3">退部・卒部や規約違反などでアクセスを止めたい場合は「利用停止」を使ってください。過去の試合・出欠・配車・会費等の記録は保持されます。「完全削除」はログイン情報(メールアドレス等)を取り消せない形で削除します(この操作でも過去の記録は削除されません)。</p>
+        <div class="space-y-2">
+          <template x-for="m in approvedAndSuspendedMembers" :key="m.id">
+            <div class="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+              <div>
+                <p class="text-sm font-semibold" x-text="m.name + '家'"></p>
+                <p class="text-[11px]" :class="m.status==='suspended' ? 'text-red-500 font-bold' : 'text-slate-400'"
+                  x-text="m.status==='suspended' ? '停止中' : '利用中'"></p>
+              </div>
+              <div class="flex gap-2">
+                <button @click="toggleMemberSuspend(m.id)" class="tap-btn text-xs font-bold px-3 py-1.5 rounded-lg"
+                  :class="m.status==='suspended' ? 'bg-emerald-500 text-white' : 'bg-amber-100 text-amber-700'"
+                  x-text="m.status==='suspended' ? '利用再開' : '利用停止'"></button>
+                <button @click="deleteMemberPermanently(m.id)" class="tap-btn text-xs font-bold px-3 py-1.5 rounded-lg bg-red-50 text-red-500">完全削除</button>
+              </div>
+            </div>
+          </template>
+          <p x-show="approvedAndSuspendedMembers.length===0" class="text-xs text-slate-400">対象のご家庭はいません。</p>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-400 text-center px-4">
+        ※ スケジュール・配車・試合結果の編集/削除は、それぞれの画面上で管理者にのみ「編集」「削除」ボタンが表示されます。
+      </p>
+
+      <!-- データ管理(プロトタイプ用) -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">🛠 データ管理(プロトタイプ用)</h3>
+        <p class="text-xs text-slate-400 mb-3">このアプリはお使いの端末のブラウザ内にデータを保存しています。動作がおかしい時や、最初のデモ状態に戻したい時にお使いください。スマホでも開発者ツールなしでリセットできます。</p>
+        <button @click="resetAllData()" class="tap-btn w-full bg-red-50 text-red-600 border border-red-200 font-semibold py-2.5 rounded-lg text-sm">🔄 すべてのデータをリセットする</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- モバイル用ボトムナビ -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex overflow-x-auto z-20">
+    <template x-for="tab in mobileNavTabs" :key="tab.id">
+      <button @click="activeTab = tab.id"
+        class="tap-btn flex-shrink-0 min-w-[62px] px-1 py-2.5 flex flex-col items-center gap-0.5 text-[10px] font-semibold whitespace-nowrap"
+        :class="activeTab===tab.id ? 'text-violet-800' : 'text-slate-400'">
+        <span class="text-lg" x-text="tab.icon"></span>
+        <span x-text="tab.label"></span>
+      </button>
+    </template>
+  </nav>
+</div>
+
+<!-- ============================================================
+     モーダル: 日程の編集(当番・行事・予定)
+     ============================================================ -->
+<div x-show="showDayModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h3 class="font-bold" x-text="editingDay.date + ' の予定'"></h3>
+      <button @click="showDayModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
+    </div>
+
+    <!-- メンバー用: 閲覧のみ -->
+    <template x-if="!isAdmin">
+      <div class="space-y-2 text-sm">
+        <p x-show="editingDay.duty"><span class="font-semibold">当番:</span> <span x-text="editingDay.duty"></span></p>
+        <p x-show="editingDay.dayType"><span class="font-semibold">予定:</span> <span x-text="editingDay.dayType"></span></p>
+        <p x-show="editingDay.place"><span class="font-semibold">会場:</span> <span x-text="editingDay.place"></span></p>
+        <p x-show="editingDay.meetPlace || editingDay.meetTime"><span class="font-semibold">集合場所/時間:</span>
+          <span x-text="editingDay.meetPlace"></span> <span x-text="editingDay.meetTime"></span></p>
+        <div x-show="editingDay.opponents && editingDay.opponents.length">
+          <p><span class="font-semibold">対戦相手:</span> <span x-text="editingDay.opponents.map(o=>o.name).join('、')"></span></p>
+          <div class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
+              <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(editingDay)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
+                x-text="myCarpoolStatusForDay(editingDay)"></span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1"
+              x-text="'配車可能 ' + carpoolCountsForDay(editingDay).canDrive + '家族 / 配車が必要 ' + carpoolCountsForDay(editingDay).needRide + '家族(回答 ' + carpoolCountsForDay(editingDay).total + '家族)'"></p>
+            <button @click="goToCarpool(editingDay.date)" class="tap-btn text-[11px] text-violet-800 font-semibold mt-1.5">配車の詳細・回答はこちら →</button>
+          </div>
+        </div>
+        <p x-show="editingDay.memo"><span class="font-semibold">メモ:</span> <span x-text="editingDay.memo"></span></p>
+        <div x-show="editingDay.materials && editingDay.materials.length">
+          <span class="font-semibold">📎 資料:</span>
+          <div class="flex flex-col gap-1 mt-1">
+            <template x-for="(mat, mi) in editingDay.materials" :key="mi">
+              <a :href="mat.url" target="_blank" class="text-violet-700 underline text-sm" x-text="mat.label || ('資料' + (mi+1))"></a>
+            </template>
+          </div>
+        </div>
+        <p x-show="!editingDay.duty && !editingDay.dayType && !editingDay.memo" class="text-slate-400">この日の予定はまだ登録されていません。</p>
+      </div>
+    </template>
+
+    <!-- 管理者用: 編集 -->
+    <template x-if="isAdmin">
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500">当番</label>
+          <input type="text" x-model="editingDay.duty" placeholder="例)松本" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-slate-500">予定の種類</label>
+          <select x-model="editingDay.dayType" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">-- 選択なし --</option>
+            <option value="練習">練習</option>
+            <option value="公式戦">公式戦</option>
+            <option value="カップ戦">カップ戦</option>
+            <option value="練習試合">練習試合</option>
+            <option value="休み">休み</option>
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1" x-show="!editingDay.dayType && editingDay.duty">種類を選ばなくても、当番が入っていれば「練習」の日として扱われます。</p>
+        </div>
+
+        <template x-if="['公式戦','カップ戦','練習試合'].includes(editingDay.dayType)">
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs font-medium text-slate-500">会場</label>
+              <input type="text" x-model="editingDay.place" placeholder="例)市民体育館 第一アリーナ" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500">集合場所/時間</label>
+              <div class="flex gap-2 mt-1">
+                <input type="text" x-model="editingDay.meetPlace" placeholder="集合場所(会場と同じなら空欄でOK)" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <select x-model="editingDay.meetTime" class="w-28 border border-slate-300 rounded-lg px-2 py-2 text-sm">
+                  <option value="">--:--</option>
+                  <template x-for="t in timeOptions" :key="t">
+                    <option :value="t" x-text="t"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs font-medium text-slate-500">対戦相手(1日に複数可・カップ戦向け)</label>
+              <div class="flex flex-wrap gap-1 mt-1">
+                <template x-for="(o,oi) in editingDay.opponents" :key="oi">
+                  <span class="bg-slate-100 text-xs rounded-full px-2 py-1 flex items-center gap-1">
+                    <span x-text="o.name"></span>
+                    <button @click="editingDay.opponents.splice(oi,1)" class="tap-btn text-slate-400 hover:text-red-500">×</button>
+                  </span>
+                </template>
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <input type="text" x-model="newOpponentInput" placeholder="対戦相手名" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-xs" @keydown.enter.prevent="addOpponent()">
+                <button @click="addOpponent()" class="tap-btn bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">追加</button>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">登録すると、保存時に試合結果・スタッツ・配車から選べるようになります。</p>
+
+              <!-- 保存済みの対戦相手があれば配車の状況もその場で表示 -->
+              <div x-show="editingDay.opponents.some(o=>o.gameId)" class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
+                  <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(editingDay)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
+                    x-text="myCarpoolStatusForDay(editingDay)"></span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1"
+                  x-text="'配車可能 ' + carpoolCountsForDay(editingDay).canDrive + '家族 / 配車が必要 ' + carpoolCountsForDay(editingDay).needRide + '家族(回答 ' + carpoolCountsForDay(editingDay).total + '家族)'"></p>
+                <button @click="goToCarpool(editingDay.date)" class="tap-btn text-[11px] text-violet-800 font-semibold mt-1.5">配車の詳細・回答はこちら →</button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <div>
+          <label class="text-xs font-medium text-slate-500">メモ</label>
+          <textarea x-model="editingDay.memo" rows="2" placeholder="自由記入(大会名・持ち物・注意事項など)" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></textarea>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-slate-500">📎 資料(複数添付可・リンク形式)</label>
+          <p class="text-[11px] text-slate-400 mt-0.5 mb-1">PDFや配布物はGoogleドライブ等にアップロードし、そのリンクを追加してください(ファイルそのものはこのアプリには保存されません)。</p>
+          <div class="space-y-1.5">
+            <template x-for="(mat, mi) in editingDay.materials" :key="mi">
+              <div class="flex gap-1.5 items-center">
+                <input type="text" x-model="mat.label" placeholder="資料名(例:大会要項)" class="w-28 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <input type="url" x-model="mat.url" placeholder="リンクURL" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+                <button type="button" @click="editingDay.materials.splice(mi,1)" class="tap-btn text-slate-400 hover:text-red-500 text-sm px-1">×</button>
+              </div>
+            </template>
+          </div>
+          <button type="button" @click="(editingDay.materials || (editingDay.materials = [])).push({label:'',url:''})" class="tap-btn mt-1 text-xs font-semibold text-violet-800">+ 資料を追加</button>
+        </div>
+
+        <button @click="deleteDay()" class="tap-btn text-xs text-red-500 font-semibold">この日の内容をすべて削除</button>
+
+        <div class="flex gap-2 pt-2">
+          <button @click="showDayModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
+          <button @click="saveDay()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-violet-700 text-white">保存</button>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- モーダル: お知らせの追加・編集 -->
+<div x-show="showAnnouncementModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
+    <h3 class="font-bold" x-text="editingAnnouncement.id ? 'お知らせを編集' : 'お知らせを追加'"></h3>
+    <select x-model="editingAnnouncement.category" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <option value="">分類なし</option>
+      <option value="一般連絡">一般連絡</option>
+      <option value="日程変更">日程変更</option>
+      <option value="持ち物">持ち物</option>
+      <option value="大会・試合">大会・試合</option>
+      <option value="リンク共有">リンク共有</option>
+    </select>
+    <input type="text" x-model="editingAnnouncement.title" placeholder="タイトル" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <textarea x-model="editingAnnouncement.body" rows="3" placeholder="内容" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></textarea>
+    <input type="url" x-model="editingAnnouncement.linkUrl" placeholder="リンクURL(任意・LINEやGoogleドライブ等)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <input type="text" x-model="editingAnnouncement.linkLabel" placeholder="リンクの表示名(任意・例:写真アルバムはこちら)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" x-model="editingAnnouncement.urgent"> 緊急連絡として上部に表示する
+    </label>
+    <div class="flex gap-2 pt-2">
+      <button @click="showAnnouncementModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
+      <button @click="saveAnnouncement()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-violet-700 text-white">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: 規約 -->
+<div x-show="showBylawsModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h3 class="font-bold">📜 志免南ワイルドキャッツ規約</h3>
+      <button @click="showBylawsModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
+    </div>
+    <a href="assets/kiyaku.pdf" target="_blank" class="tap-btn block text-center bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-lg">📄 PDFで開く(印刷用)</a>
+    <div class="space-y-4 text-sm">
+      <template x-for="a in bylawsArticles" :key="a.num">
+        <div>
+          <p class="font-bold text-slate-800"><span x-text="a.num"></span> (<span x-text="a.title"></span>)</p>
+          <p class="text-slate-600 whitespace-pre-line mt-1" x-text="a.body"></p>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: ライブ配信URLの設定(誰でも操作可) -->
+<div x-show="showLiveSetupModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
+    <h3 class="font-bold" x-text="liveSetupUrl ? '🔴 配信URLを編集' : '🔴 ライブ配信を始める'"></h3>
+    <p class="text-xs text-slate-400">YouTube Live等でライブ配信を開始してから、そのURLを入力してください。YouTube LiveのURLならアプリ内に埋め込み再生されます。それ以外(Band/Instagram等)はリンクとして表示されます。</p>
+    <input type="url" x-model="liveSetupUrl" placeholder="配信URL" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <div class="flex gap-2 pt-2">
+      <button @click="showLiveSetupModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
+      <button @click="saveLiveSetup()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-red-500 text-white">🔴 保存して配信</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: 試合の追加・編集 -->
+<div x-show="showGameModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+    <h3 class="font-bold" x-text="editingGame.id ? '試合情報を編集' : '試合を追加'"></h3>
+    <input type="text" x-model="editingGame.opponent" placeholder="対戦相手" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <div class="flex gap-2">
+      <input type="date" x-model="editingGame.date" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <input type="text" x-model="editingGame.place" placeholder="会場" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    </div>
+    <input type="url" x-model="editingGame.liveUrl" placeholder="ライブ配信URL(YouTube Live / Band / Instagram等・任意)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <p class="text-[11px] text-slate-400">YouTube LiveのURLならアプリ内に動画を埋め込み再生します。それ以外は視聴用リンクとして表示されます。</p>
+    <input type="url" x-model="editingGame.videoUrl" placeholder="試合後の動画URL(ハイライト等)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <input type="url" x-model="editingGame.photoUrl" placeholder="写真ギャラリーURL(Googleフォト等)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <div class="flex gap-2 pt-2">
+      <button @click="showGameModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
+      <button @click="saveGame()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-violet-700 text-white">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: 選手個人の成績グラフ -->
+<div x-show="showPlayerDetailModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <h3 class="font-bold" x-text="detailPlayer ? ('#'+detailPlayer.number+' '+detailPlayer.name+' の成績') : ''"></h3>
+      <button @click="showPlayerDetailModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
+    </div>
+    <canvas id="playerDetailChart" height="200"></canvas>
+    <template x-if="detailPlayer">
+      <div class="grid grid-cols-2 gap-y-1 gap-x-4 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+        <p>試合数: <span class="font-bold text-slate-800" x-text="playerSeasonTotal(detailPlayer.id).games"></span></p>
+        <p>平均PTS: <span class="font-bold text-slate-800" x-text="avgStat(detailPlayer.id,'pts')"></span></p>
+        <p>平均AST: <span class="font-bold text-slate-800" x-text="avgStat(detailPlayer.id,'ast')"></span></p>
+        <p>平均REB: <span class="font-bold text-slate-800" x-text="avgStat(detailPlayer.id,'reb')"></span></p>
+        <p>FG: <span class="font-bold text-slate-800" x-text="(playerSeasonTotal(detailPlayer.id).fg2m+playerSeasonTotal(detailPlayer.id).fg3m)+'/'+(playerSeasonTotal(detailPlayer.id).fg2a+playerSeasonTotal(detailPlayer.id).fg3a)"></span></p>
+        <p>FT: <span class="font-bold text-slate-800" x-text="playerSeasonTotal(detailPlayer.id).ftm+'/'+playerSeasonTotal(detailPlayer.id).fta"></span></p>
+      </div>
+    </template>
+    <button @click="showPlayerDetailModal=false" class="tap-btn w-full py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">閉じる</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     アプリ本体のロジック(Alpine.js)
+     ============================================================ -->
+<script>
+// ================= Supabase接続(2026-08-28、フェーズ2で追加) =================
+// URLと anon/publishable キーは「ブラウザに埋め込む前提の公開鍵」であり、.envで隠すべき秘密情報ではない。
+// Row Level Security(RLS)側で保護されているため、ここに直接書いてよい。
+// 絶対にここへ書いてはいけないのは「service_role キー」(RLSを無視できる強い権限を持つ鍵)。
+const SUPABASE_URL = 'https://rjfbjlojnsbvcgpeccjq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_3i1kjAOwVV0s256tz7dHEg_Lvz3u8hZ';
+// フェーズ2では「クラブ」を1つだけ運用する。IDは supabase/phase2_schema.sql で挿入した固定値と一致させる。
+const CLUB_ID = '00000000-0000-0000-0000-000000000001';
+// グローバル変数名 `supabase` はCDNの supabase-js 自体が使っているため、クライアントは別名(sb)で持つ。
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Chart.jsのインスタンスはAlpineのリアクティブ管理下に置かない(循環参照があるため)
+const _charts = {};
+
+function app() {
+  return {
+    // ---------------- 認証まわり ----------------
+    currentUser: null,
+    authView: 'login',
+    loginEmail: '', loginPassword: '', loginError: '',
+    signupName: '', signupEmail: '', signupPassword: '', signupMessage: '',
+    signupFamily: [{ relation:'選手', name:'', number:'' }],
+
+    // ---------------- ナビゲーション ----------------
+    activeTab: 'home',
+    tabs: [
+      { id:'home',     label:'ホーム',     icon:'🏠', visible:'all' },
+      { id:'schedule', label:'スケジュール', icon:'🗓️', visible:'all' },
+      { id:'carpool',  label:'配車',       icon:'🚗', visible:'all' },
+      { id:'results',  label:'結果',       icon:'🏆', visible:'all' },
+      { id:'stats',    label:'スタッツ',    icon:'📊', visible:'all' },
+      { id:'finance',  label:'会費',       icon:'💰', visible:'finance' },
+      { id:'admin',    label:'管理',       icon:'⚙️', visible:'admin' },
+    ],
+
+    // ---------------- データ本体(初期値はinit()でlocalStorageまたはデモデータから読込) ----------------
+    members: [],
+    players: [],
+    announcements: [],
+    scheduleDays: [],
+    games: [],
+
+    // ---------------- UI用の一時状態 ----------------
+    csvImportText: '', csvImportMessage: '',
+    carpoolEventKey: '', myCarpoolDraft: { status:'', capacity:0, riders:[] }, carpoolSavedMessage:'',
+    carpoolSelectedRiders:[], carpoolFullMessage:'', carpoolSpotRiderName:'',
+    newPlayerNumber: '', newPlayerName: '',
+    statsEventKey: '', liveGameId: '', currentQuarter: 0, selectedPlayerId: null, statMessage: '',
+    showAnnouncementModal:false, editingAnnouncement:{},
+    showBylawsModal:false,
+    bylawsArticles: [
+      { num:'第1条', title:'名称', body:'本会は、「志免南ワイルドキャッツ」と称する。' },
+      { num:'第2条', title:'会員', body:'本会の目的に賛同する者をもって構成する。' },
+      { num:'第3条', title:'目的', body:'本会は、指導者と保護者が協力して、児童のバスケットボール技術の向上と健全育成を図るために活動すること、会員相互の親睦を図ることを目的とする。' },
+      { num:'第4条', title:'事務局', body:'本会は、その事務局を役員宅に置く。' },
+      { num:'第5条', title:'活動', body:'本会は、目的を達成するために次の活動を行う。\n① 公式戦・練習試合等の部員の送迎に関する協力、及び経費の一部助成。\n② その他、本会の目的を達成するために適切な事項。' },
+      { num:'第6条', title:'役員', body:'① 本会は次の役員を置く。\n・責任者　柏木 桃子　・コンプライアンス担当　飯田 紅美子\n・ヘッドコーチ　百田 光　・アシスタントコーチ　牛房 孝輔・出端 雄\n・事務局長　古賀 彩　・会計　玉城 政代\n・補佐(書記)　高野 美由紀\n② 役員の任期は1年とする。但し、再任を妨げない。' },
+      { num:'第7条', title:'役員の任務', body:'① 責任者は会を総括し、会を代表する。\n② コンプライアンス担当は、チーム内の暴力・暴言・パワハラ撲滅や規則順守に関する連絡・調整を行う。\n③ コーチは、選手に直接指導を行う。\n④ 事務局長は、会の運営に関する連絡・調整を行う。\n⑤ 会計は会費を徴収し、本会の運営に必要な経費の支出を行う。\n⑥ 補佐は本会の運営に必要な係を受け持つ。\nまた、チーム内での諸問題が発生した場合、役員を召集し解決を図る。ただし、役員会をもってしても解決しない場合は総会を開催し解決を図る。' },
+      { num:'第8条', title:'総会・集会', body:'① 定期総会(年1回)\n② 臨時総会(会長が必要と認めたとき)\n③ 総会の事項は、「役員の選出」、「会計報告」、「会則改定」、「その他」として、出席者の過半数でこれを決する。' },
+      { num:'第9条', title:'会計', body:'本会の運営費は、会費、寄付金、その他をもってこれにあて、会費月額3,000円とする。' },
+      { num:'第10条', title:'会計年度', body:'本会の会計は、毎年3月1日から2月末までとする。' },
+      { num:'第11条', title:'会員の脱会', body:'会員より脱会の意思表示があった翌月からとする。' },
+      { num:'第12条', title:'付記', body:'本規約は平成6年3月1日よりこれを施行する。\n本規約は平成20年3月1日よりこれを施行する。\n本規約は平成28年3月1日よりこれを施行する。\n本規約は令和6年3月1日よりこれを施行する。\n本規約は令和7年3月1日よりこれを施行する。\n本規約は令和8年3月1日よりこれを施行する。' },
+    ],
+    showGameModal:false, editingGame:{},
+    showLiveSetupModal:false, liveSetupGameId:null, liveSetupUrl:'',
+    showPlayerDetailModal:false, detailPlayer:null,
+    // カレンダー・当番編集
+    calendarYear: 2026, calendarMonth: 7, // 0=1月 なので 7=8月
+    showDayModal:false,
+    editingDay:{ date:'', duty:'', dayType:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] },
+    newOpponentInput:'',
+    // 会計・帳簿(会計担当者専用)
+    financeSettings: { monthlyFee: 3000 },
+    feePayments: [],
+    feeYear: 2026, feeMonth: 7, // 0=1月 なので 7=8月
+    financeEntries: [],
+    financeCategories: {
+      income: ['月会費','寄付','大会賞金','その他収入'],
+      expense: ['道具・ユニフォーム','大会参加費','交通費・遠征費','会場費','その他支出'],
+    },
+    newEntryType: 'expense', newEntryCategory: '道具・ユニフォーム', newEntryDescription: '', newEntryAmount: null,
+    newEntryDate: '',
+
+    // ================= 初期化 =================
+    // 2026-08-28: 会員情報(members/players)・ログイン状態(currentUser)・スケジュール・出欠・配車・
+    // 試合結果・スタッツ・会費/会計は、すべてSupabaseが正になった(ログイン後にfetchXFromSupabase()で読み込む)。
+    // localStorageに残るのはお知らせ(announcements)のみ。
+    async init() {
+      const saved = localStorage.getItem('bbclub_prototype_data');
+      if (saved) {
+        Object.assign(this, JSON.parse(saved));
+      } else {
+        this.seedDemoData();
+        this.persist();
+      }
+      // seedDemoData()は動作確認用のダミー会員データも作るが、会員情報はSupabaseから読み込むため
+      // ここでは使わない(空にしておく。ログイン後にSupabaseの実データで上書きされる)。
+      this.members = [];
+      this.players = [];
+      this.currentUser = null;
+
+      // 前回ログインしたメールアドレスをログイン欄に自動入力する(パスワードは保存していない)
+      this.loginEmail = localStorage.getItem('bbclub_last_login_email') || '';
+
+      // Supabaseにログイン済みのセッションが残っていれば復元する
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        await this.loadCurrentUserFromSupabase(session.user.id);
+      }
+
+      this.newEntryDate = this.todayStr;
+    },
+    // Supabaseの users/family_members/players から、既存のUIが期待する
+    // members[](familyMembers[]を含む)・players[] の形を組み立てて読み込み、
+    // currentUser を確定させる。停止中・承認待ちの場合は currentUser を null のままにする。
+    // 戻り値: 'ok' | 'pending' | 'suspended' | 'not_found'
+    async loadCurrentUserFromSupabase(userId) {
+      const [{ data: users, error: uErr }, { data: familyMembersRows, error: fErr }, { data: playersRows, error: pErr }] = await Promise.all([
+        sb.from('users').select('*'),
+        sb.from('family_members').select('*'),
+        sb.from('players').select('*'),
+      ]);
+      if (uErr || fErr || pErr) {
+        console.error('Supabaseからの会員データ取得に失敗しました', uErr || fErr || pErr);
+        this.currentUser = null;
+        return 'not_found';
+      }
+      this.members = (users || []).map(u => {
+        const ownFamilyMembers = (familyMembersRows || [])
+          .filter(f => f.family_id === u.family_id)
+          .map(f => ({ id: f.id, name: f.name, relation: f.relation }));
+        const ownPlayers = (playersRows || [])
+          .filter(p => p.family_id === u.family_id)
+          .map(p => ({ id: p.id, name: p.name, relation: '選手', number: p.number || '' }));
+        return {
+          id: u.id, name: u.name, email: u.email, role: u.role, status: u.status,
+          canManageCarpool: u.can_manage_carpool, canManageFinance: u.can_manage_finance, canManageLive: u.can_manage_live,
+          familyId: u.family_id,
+          familyMembers: [...ownFamilyMembers, ...ownPlayers],
+        };
+      });
+      this.players = (playersRows || []).map(p => ({ id: p.id, number: p.number || '', name: p.name, status: p.status }));
+
+      const m = this.members.find(mm => mm.id === userId);
+      if (!m) { this.currentUser = null; return 'not_found'; }
+      if (m.status === 'pending') { this.currentUser = null; return 'pending'; }
+      if (m.status === 'suspended') { this.currentUser = null; await sb.auth.signOut(); return 'suspended'; }
+      this.currentUser = {
+        id: m.id, name: m.name, email: m.email, role: m.role,
+        canManageCarpool: m.canManageCarpool, canManageFinance: m.canManageFinance, canManageLive: m.canManageLive,
+      };
+      await this.fetchScheduleDaysFromSupabase();
+      await this.fetchGamesFromSupabase();
+      // 会計担当者・管理者以外は会計タブ自体を開けないため、無駄なフェッチを避ける
+      if (this.currentUser.role === 'admin' || this.currentUser.canManageFinance) {
+        await this.fetchFinanceFromSupabase();
+      }
+      return 'ok';
+    },
+    // 2026-08-28: スケジュール・出欠・配車をSupabaseから取得する(フェーズ3で予定・出欠、
+    // フェーズ4で配車を追加)。今までどおりの scheduleDays[] の形に組み立てるため、
+    // 配車タブ側の表示ロジックは一切変更不要になる。
+    async fetchScheduleDaysFromSupabase() {
+      const [
+        { data: days, error: dErr },
+        { data: attendanceRows, error: aErr },
+        { data: carpoolResponseRows, error: crErr },
+        { data: carpoolAssignmentRows, error: caErr },
+        { data: spotRiderRows, error: srErr },
+      ] = await Promise.all([
+        sb.from('schedule_days').select('*'),
+        sb.from('attendance').select('*'),
+        sb.from('carpool_responses').select('*'),
+        sb.from('carpool_assignments').select('*'),
+        sb.from('carpool_spot_riders').select('*'),
+      ]);
+      if (dErr || aErr || crErr || caErr || srErr) {
+        console.error('スケジュール・配車の取得に失敗しました', dErr || aErr || crErr || caErr || srErr);
+        this.scheduleDays = [];
+        return;
+      }
+      this.scheduleDays = (days || []).map(d => {
+        const attendance = {};
+        (attendanceRows || []).filter(a => a.date === d.date).forEach(a => { attendance[a.user_id] = a.status; });
+        const carpoolResponses = {};
+        (carpoolResponseRows || []).filter(r => r.date === d.date).forEach(r => {
+          carpoolResponses[r.user_id] = { status: r.status, capacity: r.capacity, riders: r.riders || [] };
+        });
+        const carpoolAssignments = {};
+        (carpoolAssignmentRows || []).filter(a => a.date === d.date).forEach(a => { carpoolAssignments[a.person_id] = a.driver_user_id; });
+        const carpoolSpotRiders = (spotRiderRows || []).filter(s => s.date === d.date).map(s => ({ id: s.id, name: s.name }));
+        return {
+          id: 'day_' + d.date, date: d.date, duty: d.duty || '', dayType: d.day_type || '',
+          meetPlace: d.meet_place || '', meetTime: d.meet_time || '', place: d.place || '', memo: d.memo || '',
+          opponents: d.opponents || [], materials: d.materials || [],
+          attendance, carpoolResponses, carpoolAssignments, carpoolSpotRiders,
+        };
+      });
+    },
+    // 2026-08-28: 試合結果・スタッツをSupabaseから取得する(フェーズ5で追加)。
+    // games(基本情報)・game_media(動画/配信URL)・game_live_stats(スタッツ)の3表を
+    // game_idで結合し、今までどおりの games[] の形に組み立て直す。
+    async fetchGamesFromSupabase() {
+      const [
+        { data: gameRows, error: gErr },
+        { data: mediaRows, error: mErr },
+        { data: statsRows, error: sErr },
+      ] = await Promise.all([
+        sb.from('games').select('*'),
+        sb.from('game_media').select('*'),
+        sb.from('game_live_stats').select('*'),
+      ]);
+      if (gErr || mErr || sErr) {
+        console.error('試合結果の取得に失敗しました', gErr || mErr || sErr);
+        this.games = [];
+        return;
+      }
+      this.games = (gameRows || []).map(g => {
+        const media = (mediaRows || []).find(m => m.game_id === g.id) || {};
+        const stats = (statsRows || []).find(s => s.game_id === g.id) || {};
+        return {
+          id: g.id, opponent: g.opponent, date: g.date || '', place: g.place || '', finished: !!g.finished,
+          category: g.category || '', roundLabel: g.round_label || '',
+          videoUrl: media.video_url || '', photoUrl: media.photo_url || '', liveUrl: media.live_url || '', isLive: !!media.is_live,
+          quarters: stats.quarters || [{home:0,away:0},{home:0,away:0},{home:0,away:0},{home:0,away:0}],
+          playerStats: stats.player_stats || {}, log: stats.log || [],
+        };
+      });
+    },
+    // 2026-08-28: 会費・会計をSupabaseから取得する(フェーズ6・最終フェーズで追加)。
+    // 会計担当者・管理者のみが呼び出す(それ以外は会計タブ自体を開けないため)。
+    async fetchFinanceFromSupabase() {
+      const [
+        { data: settingsRow, error: setErr },
+        { data: paymentRows, error: payErr },
+        { data: entryRows, error: entErr },
+      ] = await Promise.all([
+        sb.from('finance_settings').select('*').maybeSingle(),
+        sb.from('fee_payments').select('*'),
+        sb.from('finance_entries').select('*'),
+      ]);
+      if (setErr || payErr || entErr) {
+        console.error('会費・会計の取得に失敗しました', setErr || payErr || entErr);
+        return;
+      }
+      this.financeSettings = { monthlyFee: settingsRow ? settingsRow.monthly_fee : 3000 };
+      this.feePayments = (paymentRows || []).map(p => ({
+        id: p.id, memberId: p.user_id, period: p.period, amount: p.amount, paidDate: p.paid_date || '',
+      }));
+      this.financeEntries = (entryRows || []).map(e => ({
+        id: e.id, date: e.date || '', type: e.type, category: e.category || '', description: e.description || '',
+        amount: e.amount, linkedFeePaymentId: e.linked_fee_payment_id || null,
+      }));
+    },
+
+    seedDemoData() {
+      this.members = [
+        { id:1, name:'吉田 陵',   email:'admin@example.com',  password:'admin123',  role:'admin',  status:'approved', canManageCarpool:true,
+          familyMembers:[{id:'f1a',name:'吉田 陵',relation:'父'},{id:'f1b',name:'吉田 颯太',relation:'選手',number:99}] },
+        { id:2, name:'山田 花子', email:'member@example.com', password:'member123', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f2a',name:'山田 花子',relation:'母'},{id:'f2b',name:'山田 大和',relation:'選手',number:7},{id:'f2c',name:'山田 陸',relation:'弟'}] },
+        { id:3, name:'新規 太郎', email:'newbie@example.com', password:'newbie123', role:'member', status:'pending', canManageCarpool:false,
+          familyMembers:[{id:'f3a',name:'新規 太郎',relation:'父'},{id:'f3b',name:'新規 蒼',relation:'選手',number:15}] },
+        // ---- テスト用: 配車・出欠確認用に選手A〜Hとその保護者を仮登録(パスワードは全員 test1234) ----
+        { id:10, name:'A母', email:'family-a@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f10a',name:'A母',relation:'母'},{id:'f10b',name:'選手A',relation:'選手',number:1}] },
+        { id:11, name:'B父', email:'family-b@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f11a',name:'B父',relation:'父'},{id:'f11b',name:'選手B',relation:'選手',number:2}] },
+        { id:12, name:'C母', email:'family-c@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f12a',name:'C母',relation:'母'},{id:'f12b',name:'選手C',relation:'選手',number:3}] },
+        { id:13, name:'D父', email:'family-d@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f13a',name:'D父',relation:'父'},{id:'f13b',name:'選手D',relation:'選手',number:4},{id:'f13c',name:'D姉',relation:'姉'}] },
+        { id:14, name:'E母', email:'family-e@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f14a',name:'E母',relation:'母'},{id:'f14b',name:'選手E',relation:'選手',number:5}] },
+        { id:15, name:'F父', email:'family-f@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f15a',name:'F父',relation:'父'},{id:'f15b',name:'選手F',relation:'選手',number:6}] },
+        { id:16, name:'G母', email:'family-g@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f16a',name:'G母',relation:'母'},{id:'f16b',name:'選手G',relation:'選手',number:7},{id:'f16c',name:'G弟',relation:'弟'}] },
+        { id:17, name:'H父', email:'family-h@example.com', password:'test1234', role:'member', status:'approved', canManageCarpool:false,
+          familyMembers:[{id:'f17a',name:'H父',relation:'父'},{id:'f17b',name:'選手H',relation:'選手',number:8}] },
+      ];
+      this.players = [
+        { id:1, number:4,  name:'佐藤 蓮' },
+        { id:2, number:7,  name:'鈴木 大和' },
+        { id:3, number:10, name:'高橋 陽翔' },
+        { id:4, number:11, name:'田中 悠人' },
+        { id:5, number:23, name:'伊藤 湊' },
+        { id:6, number:1, name:'選手A' },
+        { id:7, number:2, name:'選手B' },
+        { id:8, number:3, name:'選手C' },
+        { id:9, number:4, name:'選手D' },
+        { id:10, number:5, name:'選手E' },
+        { id:11, number:6, name:'選手F' },
+        { id:12, number:7, name:'選手G' },
+        { id:13, number:8, name:'選手H' },
+      ];
+      this.announcements = [
+        { id:1, title:'来週の練習会場変更のお知らせ', body:'8/30(日)の練習は雨天のため体育館Bに変更になりました。', date:'2026-08-24', urgent:true },
+        { id:2, title:'夏合宿の持ち物について', body:'詳細を配車ページと合わせてご確認ください。', date:'2026-08-20', urgent:false },
+      ];
+      // 2026-08-28: スケジュール(scheduleDays)はSupabaseへ移行したため、ここでのシードは行わない。
+      // (以前はここに実際のクラブカレンダーのテキストを取り込んでいたが、削除した。
+      //  必要であれば「⚙️管理 → 📥カレンダーの一括取り込み」から手動で登録できる)
+      const _unusedCalendarText = `
+2026-07-26|松本|イカテンカップ|event|5,6年夜練@18:00
+2026-07-27|古賀|||
+2026-07-28|浦辻|||練習@13:00
+2026-07-29|沼田|||
+2026-07-30||||自主練解放@13:00
+2026-07-31|柏木|||4年以上15時@15:00
+2026-08-01||||練習試合(吉)@13:00
+2026-08-02|玉城・出端|||自主練(4年以上)@9:00;練習試合@13:00
+2026-08-03|出端|||
+2026-08-05|高野|||
+2026-08-06||||自主練解放@9:00
+2026-08-07|大熊|||
+2026-08-08||やずやカップ|event|
+2026-08-09||やずやカップ|event|
+2026-08-10|浦辻|||
+2026-08-11||山の日|holiday|練習試合@8:00
+2026-08-12|山崎|||
+2026-08-13||全九州大会|event|
+2026-08-15||休み|off|
+2026-08-16|高野|||練習試合@8:00
+2026-08-17||休み|off|
+2026-08-18||||自主練解放@13:00
+2026-08-19|宮部|||
+2026-08-20||||自主練解放@13:00
+2026-08-21|玉城|||
+2026-08-22||中部地区大会|event|
+2026-08-23||中部地区大会|event|
+2026-08-24|松本|||
+2026-08-25||||自主練解放@13:00
+2026-08-26|吉田|||
+2026-08-27||||自主練解放@13:00
+2026-08-28|空閑|||
+2026-08-29||玉吉カップ|event|
+2026-08-30||玉吉カップ|event|
+2026-08-31|高木|||
+2026-09-01||防災の日|off|
+2026-09-02|田代|||
+2026-09-04|稲永|||
+2026-09-05||温泉カップ|event|
+2026-09-06||温泉カップ|event|
+2026-09-07|永井|||
+2026-09-09|高野|||
+2026-09-11|古賀|||
+2026-09-12||||午後練@13:00
+2026-09-13||||午後練@13:00
+2026-09-14|沼田|||
+2026-09-16|出端|||
+2026-09-18|山崎|||
+2026-09-19||||午後練@13:00
+2026-09-20||志免堅杭杯|event|
+2026-09-21||敬老の日|holiday|
+2026-09-22||国民の休日|holiday|練習試合(予定)@
+2026-09-23||秋分の日|holiday|練習試合(予定)@
+2026-09-25|浦辻|||
+2026-09-26||||午後練@13:00
+2026-09-27||練習|event|
+2026-09-28|松本|||
+2026-09-30|玉城|||
+2026-10-02|大熊|||
+2026-10-03||||午後練@13:00
+2026-10-04||秋季大会精屋予選|event|
+2026-10-10||練習|event|
+2026-10-11||スポーツフェスタ|event|
+2026-10-12||スポーツの日・秋季大会精屋予選|holiday|
+2026-10-17||||午後練@14:00
+2026-10-18||秋季大会精屋決勝|event|
+2026-10-19||休み|off|
+2026-10-31||ハロウィン|off|練習@
+2026-11-03||文化の日|holiday|
+2026-11-08||中部予選|event|
+2026-11-15||七五三・中部決勝|event|
+2026-11-16||休み|off|
+2026-11-23||勤労感謝の日|holiday|
+2026-11-28||県大会(予定)|event|
+2026-12-05||県大会(予定)|event|
+2026-12-06||県大会(予定)|event|
+2026-12-21||休み|off|
+2026-12-24||クリスマス・イヴ|off|
+2026-12-25||クリスマス|off|
+2026-12-31||大晦日|off|
+2027-01-01||元日|holiday|
+2027-01-10||県大会決勝(予定)|event|
+2027-01-11||成人の日|holiday|
+2027-01-18||休み|off|
+2027-02-03||節分|off|
+`.trim();
+      // this.scheduleDaysへの代入はしない(Supabaseから取得するため)。上のテキストは参考として残してある。
+
+      // 2026-08-28: games もSupabaseへ移行済みのため、以下のシードはログイン後に上書きされる(使われない)。
+      this.games = [
+        {
+          id:1, opponent:'港北イーグルス', date:'2026-08-10', place:'区民体育館', finished:true,
+          category:'公式戦', roundLabel:'港北イーグルス戦',
+          videoUrl:'https://youtube.com', photoUrl:'https://photos.google.com',
+          quarters:[{home:12,away:8},{home:10,away:14},{home:15,away:9},{home:11,away:10}],
+          playerStats:{
+            1:{pts:14,ast:3,reb:5,foul:2,fg2m:5,fg2a:8,fg3m:1,fg3a:2,ftm:2,fta:2},
+            2:{pts:10,ast:5,reb:2,foul:1,fg2m:3,fg2a:5,fg3m:1,fg3a:3,ftm:1,fta:2},
+            3:{pts:6, ast:1,reb:7,foul:3,fg2m:3,fg2a:6,fg3m:0,fg3a:0,ftm:0,fta:0},
+          },
+          log: [],
+        },
+        {
+          id:2, opponent:'福岡ジュニアーズ', date:'2026-09-10', place:'市民体育館 第二アリーナ', finished:false,
+          category:'公式戦', roundLabel:'秋季大会予選',
+          videoUrl:'', photoUrl:'', liveUrl:'', isLive:false,
+          quarters:[{home:0,away:0},{home:0,away:0},{home:0,away:0},{home:0,away:0}],
+          playerStats:{}, log:[],
+        },
+      ];
+      // 2026-08-28: 配車デモ(linkDemoGame)は削除した。scheduleDaysがSupabase移行済みのため
+      // ローカルシードでの日程・配車の紐付けは意味を持たなくなったため。
+    },
+
+    // デモ用シードデータ(旧形式: 日付|当番|行事名|色|予定@時間;予定@時間)を、
+    // 現行の1日1区分モデル(dayType/meetTime/place/memo)に変換して読み込む
+    parseLegacySeedText(text) {
+      let seq = 0;
+      return text.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        const [date, duty, tag, tagColor, eventsStr] = line.split('|');
+        const t = (tag || '').trim();
+        const events = (eventsStr || '').split(';').map(s => s.trim()).filter(Boolean);
+        let dayType = '', memo = '';
+        if (t) {
+          if (t === '練習') {
+            dayType = '練習';
+          } else if (tagColor === 'holiday' || tagColor === 'off') {
+            dayType = '休み'; memo = t;
+          } else {
+            dayType = 'カップ戦'; memo = t; // 旧「行事・大会名」は基本的に大会系なのでカップ戦扱い(必要なら管理画面で個別修正可)
+          }
+        } else if (events.length) {
+          const hasGame = events.some(e => e.split('@')[0].includes('試合'));
+          dayType = hasGame ? '練習試合' : '練習';
+          memo = events.map(e => { const [title,time] = e.split('@'); return title + (time ? '(' + time + ')' : ''); }).join('・');
+        }
+        seq++;
+        return {
+          id: 'day_' + (date || seq), date: (date || '').trim(), duty: (duty || '').trim(),
+          dayType, meetPlace:'', meetTime:'', place:'', memo,
+          opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[],
+        };
+      }).filter(d => d.date);
+    },
+    // 「日付,当番,種類,会場,集合場所,集合時間,メモ」形式のテキストを日程データに変換(管理画面からの一括取り込み用)
+    parseCalendarText(text) {
+      return text.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+        const parts = line.split(',').map(s => (s || '').trim());
+        const [date, duty, dayType, place, meetPlace, meetTime, memo] = parts;
+        if (!date) return null;
+        return {
+          id: 'day_' + date, date, duty: duty || '',
+          dayType: dayType || '', meetPlace: meetPlace || '', meetTime: meetTime || '', place: place || '', memo: memo || '',
+          opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[],
+        };
+      }).filter(Boolean);
+    },
+
+    // 2026-08-28: members/players/currentUser・scheduleDays(予定・出欠・配車)・games(試合結果・スタッツ)・
+    // finance系(会費・帳簿)はすべてSupabaseが正になったため、ここでは保存しない。
+    // localStorageに残るのは announcements(お知らせ)のみ。
+    persist() {
+      const data = { announcements:this.announcements };
+      localStorage.setItem('bbclub_prototype_data', JSON.stringify(data));
+    },
+    // 端末に保存されたデータを消去し、デモ用の初期データに戻す(スマホでも開発者ツール不要)
+    resetAllData() {
+      if (!confirm('この端末に保存されているすべてのデータを削除し、最初のデモ状態に戻します。よろしいですか?')) return;
+      localStorage.removeItem('bbclub_prototype_data');
+      location.reload();
+    },
+
+    // ================= 認証 =================
+    get isAdmin() { return this.currentUser && this.currentUser.role === 'admin'; },
+    get isFinanceManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageFinance)); },
+    get visibleTabs() {
+      return this.tabs.filter(t => {
+        if (t.visible === 'admin') return this.isAdmin;
+        if (t.visible === 'finance') return this.isFinanceManager;
+        return true;
+      });
+    },
+    // スマホのボトムナビは横に並べられる数に限りがあるため「管理」は含めない
+    // (管理画面へはヘッダーの⚙️アイコンから入る)
+    get mobileNavTabs() {
+      return this.visibleTabs.filter(t => t.id !== 'admin');
+    },
+
+    async login() {
+      this.loginError = '';
+      const { error } = await sb.auth.signInWithPassword({ email: this.loginEmail, password: this.loginPassword });
+      if (error) { this.loginError = 'メールアドレスまたはパスワードが正しくありません。'; return; }
+      const { data: { user } } = await sb.auth.getUser();
+      const status = await this.loadCurrentUserFromSupabase(user.id);
+      if (status === 'pending') { this.loginError = 'まだ管理者の承認待ちです。承認されるまでお待ちください。'; return; }
+      if (status === 'suspended') { this.loginError = 'このアカウントは現在ご利用いただけません。詳しくはクラブ管理者へお問い合わせください。'; return; }
+      if (status !== 'ok') { this.loginError = 'アカウント情報が見つかりませんでした。管理者にお問い合わせください。'; return; }
+      // 次回ログイン画面を開いたときにメールアドレスを自動入力できるよう記憶しておく(パスワードは保存しない)
+      localStorage.setItem('bbclub_last_login_email', this.loginEmail);
+      this.activeTab = 'home';
+    },
+    googleLoginMock() {
+      alert('デモ版のためGoogleログインは無効です。\n本番環境ではSupabase AuthのGoogle OAuth連携に置き換えます。');
+    },
+    // 家族の入力行を「保護者/選手/家族同乗者(クラブ非所属)」の3種類に分類する
+    familyMemberCategory(relation) {
+      if (relation === '選手') return 'player';
+      if (relation === '父' || relation === '母' || relation === 'その他保護者') return 'guardian';
+      return 'rider';
+    },
+    // 指定カテゴリの入力行だけを、元の配列インデックス付きで取り出す(削除ボタンで splice するため)
+    signupFamilyByCategory(category) {
+      return this.signupFamily
+        .map((fm, idx) => ({ fm, idx }))
+        .filter(item => this.familyMemberCategory(item.fm.relation) === category);
+    },
+    async signup() {
+      this.signupMessage = '';
+      if (!this.signupName || !this.signupEmail || !this.signupPassword) {
+        this.signupMessage = 'お名前・メールアドレス・パスワードを入力してください。'; return;
+      }
+      const family = this.signupFamily.filter(f => f.name && f.name.trim());
+      const hasPlayer = family.some(f => f.relation === '選手');
+      if (!hasPlayer) {
+        this.signupMessage = '選手(お子様)のお名前を1名以上入力してください。'; return;
+      }
+
+      // 1. Supabase Authにログインアカウントを作成する
+      const { data: authData, error: authError } = await sb.auth.signUp({
+        email: this.signupEmail, password: this.signupPassword,
+      });
+      if (authError) {
+        if (authError.message && authError.message.toLowerCase().includes('already')) {
+          this.signupMessage = 'このメールアドレスは既に登録されています。';
+        } else if (authError.message && authError.message.toLowerCase().includes('password')) {
+          this.signupMessage = 'パスワードは6文字以上で入力してください。';
+        } else {
+          this.signupMessage = '登録に失敗しました。時間をおいて再度お試しください。';
+        }
+        return;
+      }
+      const userId = authData && authData.user && authData.user.id;
+      if (!userId) {
+        this.signupMessage = '登録に失敗しました。時間をおいて再度お試しください。';
+        return;
+      }
+
+      // 2. 家庭(families)を1件作成。
+      //    IDはブラウザ側で先に生成しておく(作成直後は承認待ちのため、まだ自分の家庭情報を
+      //    読み返す権限がRLS上無く、.select()で読み返そうとすると失敗するため)。
+      const familyId = crypto.randomUUID();
+      const { error: famError } = await sb.from('families')
+        .insert({ id: familyId, club_id: CLUB_ID, status: 'active' });
+      if (famError) {
+        this.signupMessage = '登録に失敗しました(家庭情報の作成でエラー)。管理者にご連絡ください。'; return;
+      }
+
+      // 3. ログインアカウントのプロフィール(users)を作成。承認待ち(pending)から開始する
+      const { error: userError } = await sb.from('users').insert({
+        id: userId, club_id: CLUB_ID, family_id: familyId,
+        name: this.signupName, email: this.signupEmail, role: 'member', status: 'pending',
+      });
+      if (userError) {
+        this.signupMessage = '登録に失敗しました(会員情報の作成でエラー)。管理者にご連絡ください。'; return;
+      }
+
+      // 4. 選手はplayersへ、保護者(もう一方)・家族同乗者はfamily_membersへ登録
+      const playersToInsert = family.filter(f => f.relation === '選手');
+      const ridersToInsert = family.filter(f => f.relation !== '選手');
+      if (playersToInsert.length) {
+        await sb.from('players').insert(playersToInsert.map(f => ({
+          club_id: CLUB_ID, family_id: familyId, name: f.name.trim(),
+          number: f.number ? String(f.number) : null, status: 'active',
+        })));
+      }
+      if (ridersToInsert.length) {
+        await sb.from('family_members').insert(ridersToInsert.map(f => ({
+          family_id: familyId, kind: this.familyMemberCategory(f.relation), name: f.name.trim(), relation: f.relation,
+        })));
+      }
+
+      this.signupMessage = '登録が完了しました。管理者の承認後にログインできます。';
+      this.signupName = ''; this.signupEmail = ''; this.signupPassword = '';
+      this.signupFamily = [{ relation:'選手', name:'', number:'' }];
+      setTimeout(() => { this.authView = 'login'; this.signupMessage=''; }, 2500);
+    },
+    async logout() {
+      await sb.auth.signOut();
+      this.currentUser = null;
+      this.members = [];
+      this.players = [];
+    },
+
+    // ================= お知らせ =================
+    openAnnouncementModal(a) {
+      this.editingAnnouncement = a ? { ...a } : { id:null, title:'', body:'', urgent:false, category:'', linkUrl:'', linkLabel:'' };
+      this.showAnnouncementModal = true;
+    },
+    saveAnnouncement() {
+      if (!this.editingAnnouncement.title) return;
+      if (this.editingAnnouncement.id) {
+        const idx = this.announcements.findIndex(a => a.id === this.editingAnnouncement.id);
+        this.announcements[idx] = { ...this.editingAnnouncement };
+      } else {
+        this.announcements.unshift({ ...this.editingAnnouncement, id: Date.now(), date: new Date().toISOString().slice(0,10) });
+      }
+      this.showAnnouncementModal = false;
+      this.persist();
+    },
+    deleteAnnouncement(id) {
+      if (!confirm('このお知らせを削除しますか?')) return;
+      this.announcements = this.announcements.filter(a => a.id !== id);
+      this.persist();
+    },
+
+    // ================= スケジュール(カレンダー・当番) =================
+    pad2(n) { return String(n).padStart(2,'0'); },
+    // 集合時間プルダウン用: 6:00〜21:00を5分刻みで生成
+    get timeOptions() {
+      const list = [];
+      for (let h = 6; h <= 21; h++) {
+        for (let m = 0; m < 60; m += 5) {
+          if (h === 21 && m > 0) break;
+          list.push(this.pad2(h) + ':' + this.pad2(m));
+        }
+      }
+      return list;
+    },
+    ymd(y,m,d) { return `${y}-${this.pad2(m+1)}-${this.pad2(d)}`; }, // m は 0始まり
+    get todayStr() {
+      const t = new Date();
+      return this.ymd(t.getFullYear(), t.getMonth(), t.getDate());
+    },
+    getDay(dateStr) { return this.scheduleDays.find(d => d.date === dateStr) || null; },
+    dayTypeColor(type) {
+      return type === '公式戦' ? 'bg-red-500'
+        : type === 'カップ戦' ? 'bg-fuchsia-500'
+        : type === '練習試合' ? 'bg-amber-500'
+        : type === '休み' ? 'bg-slate-400'
+        : 'bg-rose-400'; // 練習
+    },
+    // カレンダーグリッド(日曜始まり、前後月の余白日を含む6週分)
+    get calendarCells() {
+      const y = this.calendarYear, m = this.calendarMonth;
+      const firstDow = new Date(y, m, 1).getDay();
+      const daysInMonth = new Date(y, m+1, 0).getDate();
+      const cells = [];
+      // 前月の余白
+      const prevDays = new Date(y, m, 0).getDate();
+      for (let i = firstDow - 1; i >= 0; i--) {
+        const d = prevDays - i;
+        const pm = m === 0 ? 11 : m - 1, py = m === 0 ? y - 1 : y;
+        const date = this.ymd(py, pm, d);
+        cells.push({ date, d, dow: new Date(date).getDay(), inMonth:false, day:this.getDay(date) });
+      }
+      // 当月
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = this.ymd(y, m, d);
+        cells.push({ date, d, dow: new Date(date).getDay(), inMonth:true, day:this.getDay(date) });
+      }
+      // 翌月の余白(6週=42マスになるまで)
+      let nd = 1;
+      const nm = m === 11 ? 0 : m + 1, ny = m === 11 ? y + 1 : y;
+      while (cells.length < 42) {
+        const date = this.ymd(ny, nm, nd);
+        cells.push({ date, d:nd, dow: new Date(date).getDay(), inMonth:false, day:this.getDay(date) });
+        nd++;
+      }
+      return cells;
+    },
+    prevMonth() {
+      if (this.calendarMonth === 0) { this.calendarMonth = 11; this.calendarYear--; }
+      else { this.calendarMonth--; }
+    },
+    nextMonth() {
+      if (this.calendarMonth === 11) { this.calendarMonth = 0; this.calendarYear++; }
+      else { this.calendarMonth++; }
+    },
+    openDayModal(dateStr) {
+      const existing = this.getDay(dateStr);
+      this.editingDay = existing
+        ? JSON.parse(JSON.stringify(existing))
+        : { id:'day_'+dateStr, date:dateStr, duty:'', dayType:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] };
+      // 古い日程データには materials フィールドが無い場合があるため、常に配列であることを保証する
+      if (!this.editingDay.materials) this.editingDay.materials = [];
+      this.newOpponentInput = '';
+      this.showDayModal = true;
+    },
+    // 公式戦・カップ戦・練習試合には対戦相手を複数登録できる(カップ戦は1日に複数試合があるため)
+    addOpponent() {
+      const name = (this.newOpponentInput || '').trim();
+      if (!name) return;
+      if (!this.editingDay.opponents) this.editingDay.opponents = [];
+      this.editingDay.opponents.push({ name, gameId:null });
+      this.newOpponentInput = '';
+    },
+    // 登録された対戦相手ごとに、保存時に「試合」レコードを自動作成し、結果・スタッツから参照できるようにする
+    async linkGamesForDay(day) {
+      if (!day.opponents) return;
+      for (const o of day.opponents) {
+        if (o.gameId) continue;
+        const { data: gameRow, error } = await sb.from('games').insert({
+          opponent: o.name, date: day.date, place: day.place || '',
+          category: day.dayType, round_label: day.memo || day.dayType, finished: false,
+        }).select().single();
+        if (error || !gameRow) { console.error('試合の自動作成に失敗しました', error); continue; }
+        await Promise.all([
+          sb.from('game_media').insert({ game_id: gameRow.id }),
+          sb.from('game_live_stats').insert({ game_id: gameRow.id }),
+        ]);
+        const newGame = {
+          id: gameRow.id,
+          opponent: o.name, date: day.date, place: day.place || '', finished:false,
+          category: day.dayType, roundLabel: day.memo || day.dayType, videoUrl:'', photoUrl:'', liveUrl:'', isLive:false,
+          quarters:[{home:0,away:0},{home:0,away:0},{home:0,away:0},{home:0,away:0}],
+          playerStats:{}, log:[],
+        };
+        this.games.push(newGame);
+        o.gameId = newGame.id;
+      }
+    },
+    async saveDay() {
+      // 未入力(URL空欄)のまま残った資料行は保存しない
+      this.editingDay.materials = (this.editingDay.materials || []).filter(m => m.url && m.url.trim());
+      await this.linkGamesForDay(this.editingDay);
+      // コア項目(予定の基本情報)をSupabaseへ保存。出欠・配車はここでは触らない。
+      const { error } = await sb.from('schedule_days').upsert({
+        date: this.editingDay.date,
+        duty: this.editingDay.duty || null,
+        day_type: this.editingDay.dayType || null,
+        meet_place: this.editingDay.meetPlace || null,
+        meet_time: this.editingDay.meetTime || null,
+        place: this.editingDay.place || null,
+        memo: this.editingDay.memo || null,
+        opponents: this.editingDay.opponents || [],
+        materials: this.editingDay.materials || [],
+      });
+      if (error) { alert('保存に失敗しました。'); console.error(error); return; }
+      const idx = this.scheduleDays.findIndex(d => d.date === this.editingDay.date);
+      if (idx >= 0) { this.scheduleDays[idx] = { ...this.editingDay }; }
+      else { this.scheduleDays.push({ ...this.editingDay }); }
+      this.showDayModal = false;
+    },
+    async deleteDay() {
+      if (!confirm('この日の当番・予定をすべて削除しますか?')) return;
+      const { error } = await sb.from('schedule_days').delete().eq('date', this.editingDay.date);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      // その日の出欠・配車データも、外部キーの on delete cascade によりSupabase側で自動的に削除される
+      this.scheduleDays = this.scheduleDays.filter(d => d.date !== this.editingDay.date);
+      this.showDayModal = false;
+    },
+    // スケジュールの予定から、対応する配車画面へ直接移動する(配車は「日程」単位で1つ)
+    goToCarpool(date) {
+      this.showDayModal = false;
+      this.activeTab = 'carpool';
+      this.carpoolEventKey = date;
+      this.onCarpoolEventChange();
+    },
+    // 出欠回答が必要な「予定」を今日以降の日程から一覧化(休み・未設定の日は除く)
+    get agendaEvents() {
+      const today = this.todayStr;
+      return this.scheduleDays
+        .filter(d => d.date >= today && d.dayType && d.dayType !== '休み')
+        .map(d => ({
+          date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', memo:d.memo||'',
+          opponents:d.opponents||[], attendance:d.attendance||{}, carpoolResponses:d.carpoolResponses||{}, materials:d.materials||[],
+        }))
+        .sort((a,b)=>a.date.localeCompare(b.date));
+    },
+    // 試合(公式戦・カップ戦・練習試合)として対戦相手が登録されている日程だけを抽出(配車・スタッツ選択用)
+    get gameAgendaEvents() {
+      return this.scheduleDays
+        .filter(d => d.opponents && d.opponents.length)
+        .map(d => ({ date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents }))
+        .sort((a,b)=>b.date.localeCompare(a.date));
+    },
+    myEventAttendance(ev) {
+      if (!this.currentUser) return 'undecided';
+      return (ev.attendance && ev.attendance[this.currentUser.id]) || 'undecided';
+    },
+    // 2026-08-28: 出欠はSupabaseの attendance テーブルへ保存する(以前は氏名文字列でキーにしていたが、
+    // user_id(Supabaseのユーザーid)でキーにするよう変更。改名・同姓同名に強くなる)。
+    async setMyEventAttendance(ev, status) {
+      if (!this.currentUser) return;
+      const d = this.scheduleDays.find(d => d.date === ev.date);
+      if (!d) return;
+      const { error } = await sb.from('attendance')
+        .upsert({ date: ev.date, user_id: this.currentUser.id, status });
+      if (error) { alert('出欠の保存に失敗しました。'); console.error(error); return; }
+      if (!d.attendance) d.attendance = {};
+      d.attendance[this.currentUser.id] = status;
+    },
+    eventAttendanceSummary(ev) {
+      const vals = Object.values(ev.attendance || {});
+      const yes = vals.filter(v=>v==='yes').length;
+      const no = vals.filter(v=>v==='no').length;
+      return `参加 ${yes}人 / 不参加 ${no}人 / 回答 ${vals.length}人`;
+    },
+    // 練習は「欠席のみ申告」方式: 自分の欠席をON/OFFする
+    toggleMyAbsence(ev) {
+      if (!this.currentUser) return;
+      this.setMyEventAttendance(ev, this.myEventAttendance(ev) === 'no' ? 'undecided' : 'no');
+    },
+    // 練習の欠席者名を一覧化(みんなが把握できるように)。attendanceはuser_idキーのため氏名に変換する。
+    absenteeNames(ev) {
+      const attendance = ev.attendance || {};
+      return Object.keys(attendance).filter(userId => attendance[userId] === 'no').map(userId => {
+        const m = this.members.find(m => String(m.id) === String(userId));
+        return m ? m.name : '(退会済み)';
+      });
+    },
+    async importScheduleCSV() {
+      const days = this.parseCalendarText(this.csvImportText);
+      for (const d of days) {
+        const { error } = await sb.from('schedule_days').upsert({
+          date: d.date, duty: d.duty || null, day_type: d.dayType || null,
+          meet_place: d.meetPlace || null, meet_time: d.meetTime || null,
+          place: d.place || null, memo: d.memo || null,
+        });
+        if (error) { console.error('日程の取り込みに失敗しました', d.date, error); continue; }
+        const idx = this.scheduleDays.findIndex(x => x.date === d.date);
+        if (idx >= 0) {
+          // CSVに無い項目(出欠・配車・対戦相手・資料)は既存のものを保持する
+          const existing = this.scheduleDays[idx];
+          this.scheduleDays[idx] = { ...existing, duty: d.duty, dayType: d.dayType, meetPlace: d.meetPlace, meetTime: d.meetTime, place: d.place, memo: d.memo };
+        } else {
+          this.scheduleDays.push(d);
+        }
+      }
+      this.csvImportMessage = `${days.length}日分の予定を取り込みました。`;
+      this.csvImportText = '';
+      setTimeout(()=> this.csvImportMessage='', 3000);
+    },
+
+    // ================= 配車 =================
+    // 配車は「試合ごと」「家族単位」で回答を集め、配車管理者が組み立てる
+    // 配車可能        : 他のご家族を車に乗せられる
+    // 配車可能(別便可) : 車を出せるが、必要なら別便(2回に分ける等)でも対応できる
+    // 別便希望        : 自分たちだけで別途移動できる(送迎不要・他のご家族も乗せない)
+    // 配車不可        : 自分たちでは移動できず、送迎が必要
+    // 不参加          : この試合には参加しない
+    carpoolStatusOptions: [
+      { value:'can_drive',      label:'配車可能',        desc:'他のご家族を車に乗せられます', activeClass:'bg-emerald-500 border-emerald-500' },
+      { value:'can_drive_flex', label:'配車可能(別便可)', desc:'車は出せますが、必要なら別便(2回に分ける等)も可能です', activeClass:'bg-teal-500 border-teal-500' },
+      { value:'separate',       label:'別便希望',        desc:'送迎は不要で、自分たちだけで別途移動できます', activeClass:'bg-blue-500 border-blue-500' },
+      { value:'need_ride',      label:'配車不可',        desc:'自分たちでは移動できないため、送迎が必要です', activeClass:'bg-amber-500 border-amber-500' },
+      { value:'not_going',      label:'不参加',          desc:'この試合には参加しません', activeClass:'bg-slate-400 border-slate-400' },
+    ],
+    // スケジュール画面から配車の状況をその場で確認できるようにするための集計ヘルパー
+    carpoolStatusLabel(status) {
+      const opt = this.carpoolStatusOptions.find(o => o.value === status);
+      return opt ? opt.label : '未回答';
+    },
+    myCarpoolStatusForDay(ev) {
+      if (!this.currentUser) return '未回答';
+      const r = (ev.carpoolResponses || {})[this.currentUser.id];
+      return r ? this.carpoolStatusLabel(r.status) : '未回答';
+    },
+    carpoolCountsForDay(ev) {
+      const vals = Object.values(ev.carpoolResponses || {});
+      const canDrive = vals.filter(v => v.status === 'can_drive' || v.status === 'can_drive_flex').length;
+      const needRide = vals.filter(v => v.status === 'need_ride').length;
+      return { canDrive, needRide, total: vals.length };
+    },
+    // carpoolEventKey は "日付_予定ID" の形式。配車は日程(遠征そのもの)単位で1つだけ回答する
+    // (カップ戦のように1日に複数の対戦相手があっても、配車は分かれないため)
+    get carpoolEvent() {
+      if (!this.carpoolEventKey) return null;
+      // carpoolEventKey は日程の日付そのもの(配車は1日1件のためキーは日付だけでよい)
+      return this.scheduleDays.find(d => d.date === this.carpoolEventKey) || null;
+    },
+    // 家庭(ログインアカウント)に属する家族メンバー一覧(選手・保護者・家族同乗者すべて含む)
+    get myFamilyMembersForCarpool() {
+      if (!this.currentUser) return [];
+      const m = this.members.find(m => m.id === this.currentUser.id);
+      return (m && m.familyMembers) || [];
+    },
+    // familyMembers の id から、どの家庭の誰かを横断的に探す(配車は個人単位で管理するため必要)
+    familyMemberById(id) {
+      for (const m of this.members) {
+        const fm = (m.familyMembers || []).find(f => String(f.id) === String(id));
+        if (fm) return fm;
+      }
+      return null;
+    },
+    // 乗せたい人をタップで複数選択/解除する(選択した全員をまとめて1台へ割り当てられる)
+    toggleCarpoolSelection(personId) {
+      const idx = this.carpoolSelectedRiders.indexOf(personId);
+      if (idx >= 0) this.carpoolSelectedRiders.splice(idx, 1);
+      else this.carpoolSelectedRiders.push(personId);
+    },
+    onCarpoolEventChange() {
+      this.carpoolSavedMessage = '';
+      this.carpoolSelectedRiders = [];
+      const ev = this.carpoolEvent;
+      if (!ev || !this.currentUser) { this.myCarpoolDraft = { status:'', capacity:0, riders:[] }; return; }
+      if (!ev.carpoolResponses) ev.carpoolResponses = {};
+      if (!ev.carpoolAssignments) ev.carpoolAssignments = {};
+      const existing = ev.carpoolResponses[this.currentUser.id];
+      // 初回はデフォルトで家族全員を「参加する」扱いにしておく(不要な人はタップで外せる)
+      const defaultRiders = this.myFamilyMembersForCarpool.map(fm => fm.id);
+      this.myCarpoolDraft = existing
+        ? { status: existing.status, capacity: existing.capacity || 0, riders: existing.riders ? [...existing.riders] : defaultRiders }
+        : { status:'', capacity:0, riders: defaultRiders };
+    },
+    // 「実際に参加するご家族」をタップで選択/解除する(選手・家族同乗者を問わず個人単位)
+    toggleMyCarpoolRider(id) {
+      if (!this.myCarpoolDraft.riders) this.myCarpoolDraft.riders = [];
+      const idx = this.myCarpoolDraft.riders.indexOf(id);
+      if (idx >= 0) this.myCarpoolDraft.riders.splice(idx, 1);
+      else this.myCarpoolDraft.riders.push(id);
+    },
+    async saveMyCarpoolResponse() {
+      const ev = this.carpoolEvent;
+      if (!ev || !this.currentUser || !this.myCarpoolDraft.status) return;
+      if (!ev.carpoolResponses) ev.carpoolResponses = {};
+      if (!ev.carpoolAssignments) ev.carpoolAssignments = {};
+      const draft = { ...this.myCarpoolDraft, riders: [...(this.myCarpoolDraft.riders || [])] };
+      const { error } = await sb.from('carpool_responses').upsert({
+        date: ev.date, user_id: this.currentUser.id,
+        status: draft.status, capacity: draft.capacity || 0, riders: draft.riders,
+      });
+      if (error) { alert('配車の回答を保存できませんでした。'); console.error(error); return; }
+      ev.carpoolResponses[this.currentUser.id] = draft;
+      const myMemberIds = this.myFamilyMembersForCarpool.map(fm => fm.id);
+      // 車を出さなくなった場合は、自分が運転者として割り当てていた分をすべて解除
+      const toDelete = [];
+      if (this.myCarpoolDraft.status !== 'can_drive' && this.myCarpoolDraft.status !== 'can_drive_flex') {
+        Object.keys(ev.carpoolAssignments).forEach(personId => {
+          if (String(ev.carpoolAssignments[personId]) === String(this.currentUser.id)) toDelete.push(personId);
+        });
+      }
+      // 「配車不可」でなくなった場合は、自分の家族への割り当てをすべて解除
+      if (this.myCarpoolDraft.status !== 'need_ride') {
+        myMemberIds.forEach(id => { if (ev.carpoolAssignments[id]) toDelete.push(id); });
+      }
+      if (toDelete.length) {
+        await sb.from('carpool_assignments').delete().eq('date', ev.date).in('person_id', toDelete);
+        toDelete.forEach(id => delete ev.carpoolAssignments[id]);
+      }
+      this.carpoolSavedMessage = '回答を保存しました。';
+      setTimeout(() => this.carpoolSavedMessage = '', 2500);
+    },
+    get carpoolResponsesList() {
+      const ev = this.carpoolEvent;
+      if (!ev || !ev.carpoolResponses) return [];
+      return Object.keys(ev.carpoolResponses).map(memberId => {
+        const m = this.members.find(m => String(m.id) === String(memberId));
+        return { memberId, name: m ? m.name : '(退会済み)', ...ev.carpoolResponses[memberId] };
+      });
+    },
+    // 「配車不可」と回答した家庭を、乗車者(選手・家族同乗者)単位に展開したもの。
+    // carpoolAssignments は { [乗車者id]: 運転者のmemberId } という1対1の対応で、
+    // 1人は必ずどこか1台にしか乗らないため配列は不要(以前の「人数の分割」方式から変更)。
+    get carpoolNeedRideFamilies() {
+      const ev = this.carpoolEvent;
+      const assignments = (ev && ev.carpoolAssignments) || {};
+      return this.carpoolResponsesList.filter(r => r.status === 'need_ride').map(fam => {
+        const riders = (fam.riders || []).map(id => {
+          const person = this.familyMemberById(id);
+          return { personId: id, name: person ? person.name : '(不明)' };
+        });
+        const unassignedRiders = riders.filter(r => !assignments[r.personId]);
+        return { ...fam, riders, unassignedRiders };
+      });
+    },
+    // 登録家族以外を今回だけ同乗させたい場合の「スポット同乗者」(イレギュラー対応)。
+    // 特定の家庭に属さない一時的な乗車者として、日程(scheduleDay)ごとに氏名だけを登録する。
+    get carpoolSpotRiders() {
+      const ev = this.carpoolEvent;
+      return (ev && ev.carpoolSpotRiders) || [];
+    },
+    get carpoolUnassignedSpotRiders() {
+      const ev = this.carpoolEvent;
+      const assignments = (ev && ev.carpoolAssignments) || {};
+      return this.carpoolSpotRiders.filter(r => !assignments[r.id]);
+    },
+    async addCarpoolSpotRider() {
+      const ev = this.carpoolEvent;
+      const name = (this.carpoolSpotRiderName || '').trim();
+      if (!ev || !name) return;
+      const id = 'spot_' + Date.now() + '_' + Math.floor(Math.random()*10000);
+      const { error } = await sb.from('carpool_spot_riders').insert({ id, date: ev.date, name });
+      if (error) { alert('スポット同乗者の追加に失敗しました。'); console.error(error); return; }
+      if (!ev.carpoolSpotRiders) ev.carpoolSpotRiders = [];
+      ev.carpoolSpotRiders.push({ id, name });
+      this.carpoolSpotRiderName = '';
+    },
+    async removeCarpoolSpotRider(id) {
+      const ev = this.carpoolEvent;
+      if (!ev || !ev.carpoolSpotRiders) return;
+      if (!confirm('このスポット同乗者を一覧から削除しますか?配車の割り当ても解除されます。')) return;
+      const { error } = await sb.from('carpool_spot_riders').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      // carpool_assignmentsはperson_idが外部キーではないため、割り当てが残っていれば明示的に消す
+      await sb.from('carpool_assignments').delete().eq('date', ev.date).eq('person_id', id);
+      ev.carpoolSpotRiders = ev.carpoolSpotRiders.filter(r => r.id !== id);
+      if (ev.carpoolAssignments && ev.carpoolAssignments[id]) delete ev.carpoolAssignments[id];
+    },
+    get carpoolUnassignedRiderCount() {
+      return this.carpoolNeedRideFamilies.reduce((s, f) => s + f.unassignedRiders.length, 0) + this.carpoolUnassignedSpotRiders.length;
+    },
+    // 家族の乗車者+スポット同乗者を1つにまとめた、名前解決用の一覧(車カードでの表示に使う)
+    get carpoolAllRiderPeople() {
+      const famRiders = this.carpoolNeedRideFamilies.flatMap(f => f.riders.map(r => ({ ...r, familyName: f.name })));
+      const spotRiders = this.carpoolSpotRiders.map(r => ({ personId: r.id, name: r.name, familyName: '' }));
+      return [...famRiders, ...spotRiders];
+    },
+    get carpoolDrivers() {
+      const ev = this.carpoolEvent;
+      const assignments = (ev && ev.carpoolAssignments) || {};
+      const allRiders = this.carpoolAllRiderPeople;
+      return this.carpoolResponsesList.filter(r => r.status === 'can_drive' || r.status === 'can_drive_flex').map(drv => {
+        const assigned = Object.keys(assignments)
+          .filter(personId => String(assignments[personId]) === String(drv.memberId))
+          .map(personId => {
+            const info = allRiders.find(r => String(r.personId) === String(personId));
+            return { personId, name: info ? info.name : '(不明)', familyName: info ? info.familyName : '' };
+          });
+        return { ...drv, assigned };
+      });
+    },
+    get carpoolSelectedRidersLabel() {
+      if (!this.carpoolSelectedRiders.length) return '';
+      return this.carpoolSelectedRiders.map(id => {
+        const info = this.carpoolAllRiderPeople.find(r => r.personId === id);
+        return info ? (info.name + (info.familyName ? '(' + info.familyName + '家)' : '(スポット同乗者)')) : '';
+      }).filter(Boolean).join('、');
+    },
+    // ①乗せたい人を複数タップして選択→②車をタップ、で選択した全員をまとめて割り当てる。
+    // 乗車可能人数(capacity)を超える割り当ては行わない(選択人数が空き数を超える場合は全体をブロックする)。
+    async assignSelectedTo(driverId) {
+      if (!this.carpoolSelectedRiders.length || !driverId) return;
+      const ev = this.carpoolEvent;
+      if (!ev) return;
+      const drv = this.carpoolDrivers.find(d => String(d.memberId) === String(driverId));
+      const remaining = drv ? (drv.capacity - drv.assigned.length) : Infinity;
+      if (this.carpoolSelectedRiders.length > remaining) {
+        this.carpoolFullMessage = remaining > 0
+          ? `選択した${this.carpoolSelectedRiders.length}人のうち、この車に乗せられるのはあと${remaining}人までです。`
+          : '満席のため、これ以上は乗せられません。';
+        setTimeout(() => this.carpoolFullMessage = '', 3000);
+        return;
+      }
+      const rows = this.carpoolSelectedRiders.map(personId => ({ date: ev.date, person_id: personId, driver_user_id: driverId }));
+      const { error } = await sb.from('carpool_assignments').upsert(rows);
+      if (error) { alert('配車の割り当てに失敗しました。'); console.error(error); return; }
+      if (!ev.carpoolAssignments) ev.carpoolAssignments = {};
+      this.carpoolSelectedRiders.forEach(personId => { ev.carpoolAssignments[personId] = driverId; });
+      this.carpoolSelectedRiders = [];
+      this.carpoolFullMessage = '';
+    },
+    async removeCarpoolAssignment(personId) {
+      const ev = this.carpoolEvent;
+      if (!ev || !ev.carpoolAssignments) return;
+      const { error } = await sb.from('carpool_assignments').delete().eq('date', ev.date).eq('person_id', personId);
+      if (error) { alert('配車の割り当て解除に失敗しました。'); console.error(error); return; }
+      delete ev.carpoolAssignments[personId];
+    },
+    get carpoolSeparate() {
+      return this.carpoolResponsesList.filter(r => r.status === 'separate').map(fam => ({
+        ...fam,
+        riders: (fam.riders || []).map(id => { const p = this.familyMemberById(id); return p ? p.name : '(不明)'; }),
+      }));
+    },
+    // ================= 権限設定(管理者のみ操作可) =================
+    get isCarpoolManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageCarpool)); },
+    get isLiveManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageLive)); },
+    get approvedMembers() { return this.members.filter(m => m.status === 'approved'); },
+    async toggleMemberFlag(id, flag, checked) {
+      const m = this.members.find(m => m.id === id);
+      if (!m) return;
+      const columnMap = { canManageCarpool: 'can_manage_carpool', canManageFinance: 'can_manage_finance', canManageLive: 'can_manage_live' };
+      const column = columnMap[flag];
+      if (!column) return;
+      const { error } = await sb.from('users').update({ [column]: checked }).eq('id', id);
+      if (error) { alert('権限の更新に失敗しました。'); return; }
+      m[flag] = checked;
+      if (this.currentUser && this.currentUser.id === id) this.currentUser[flag] = checked;
+    },
+
+    // ================= 会費管理(会計担当者専用) =================
+    prevFeeMonth() {
+      if (this.feeMonth === 0) { this.feeMonth = 11; this.feeYear--; } else { this.feeMonth--; }
+    },
+    nextFeeMonth() {
+      if (this.feeMonth === 11) { this.feeMonth = 0; this.feeYear++; } else { this.feeMonth++; }
+    },
+    get feePeriod() { return this.feeYear + '-' + this.pad2(this.feeMonth + 1); },
+    get feeRows() {
+      return this.approvedMembers.map(m => {
+        const payment = this.feePayments.find(p => p.memberId === m.id && p.period === this.feePeriod);
+        return {
+          memberId: m.id, name: m.name, paid: !!payment,
+          amount: payment ? payment.amount : this.financeSettings.monthlyFee,
+          paidDate: payment ? payment.paidDate : '',
+        };
+      });
+    },
+    get feeSummary() {
+      const rows = this.feeRows;
+      const paid = rows.filter(r => r.paid);
+      return { paidCount: paid.length, unpaidCount: rows.length - paid.length, total: paid.reduce((s,r)=>s+r.amount, 0) };
+    },
+    async updateMonthlyFee() {
+      const { error } = await sb.from('finance_settings').update({ monthly_fee: this.financeSettings.monthlyFee }).eq('club_id', CLUB_ID);
+      if (error) { console.error('月会費の設定変更に失敗しました', error); }
+    },
+    async markFeePaid(memberId) {
+      // 既に同じ月の記録があれば、先に帳簿からも取り除いてから作り直す(重複防止)
+      await this.unmarkFeePaid(memberId, /*silent*/ true);
+      const m = this.members.find(m => m.id === memberId);
+      const paymentId = crypto.randomUUID();
+      const { error: pErr } = await sb.from('fee_payments').insert({
+        id: paymentId, user_id: memberId, period: this.feePeriod, amount: this.financeSettings.monthlyFee, paid_date: this.todayStr,
+      });
+      if (pErr) { alert('納付記録の保存に失敗しました。'); console.error(pErr); return; }
+      // 会費の納付は自動的に帳簿の「収入」として記録する
+      const entryId = crypto.randomUUID();
+      const { error: eErr } = await sb.from('finance_entries').insert({
+        id: entryId, date: this.todayStr, type: 'income', category: '月会費',
+        description: (m ? m.name + '家' : '') + '(' + this.feePeriod + '分)',
+        amount: this.financeSettings.monthlyFee, linked_fee_payment_id: paymentId,
+      });
+      if (eErr) { alert('帳簿への記録に失敗しました。'); console.error(eErr); return; }
+      this.feePayments.push({ id: paymentId, memberId, period: this.feePeriod, amount: this.financeSettings.monthlyFee, paidDate: this.todayStr });
+      this.financeEntries.push({
+        id: entryId, date: this.todayStr, type: 'income', category: '月会費',
+        description: (m ? m.name + '家' : '') + '(' + this.feePeriod + '分)',
+        amount: this.financeSettings.monthlyFee, linkedFeePaymentId: paymentId,
+      });
+    },
+    async unmarkFeePaid(memberId, silent) {
+      const removed = this.feePayments.filter(p => p.memberId === memberId && p.period === this.feePeriod);
+      if (!removed.length) return;
+      const removedIds = removed.map(p => p.id);
+      // 先に帳簿側(finance_entries)を削除する。fee_paymentsを先に消すと、
+      // 外部キーのon delete set nullが働いてlinked_fee_payment_idが先にnullになってしまい、
+      // 後からこの条件で絞り込めなくなる(=帳簿に消し忘れの記録が残る)ため、順序が重要。
+      const { error: eErr } = await sb.from('finance_entries').delete().in('linked_fee_payment_id', removedIds);
+      if (eErr) { if (!silent) alert('取消に失敗しました。'); console.error(eErr); return; }
+      const { error } = await sb.from('fee_payments').delete().eq('user_id', memberId).eq('period', this.feePeriod);
+      if (error) { if (!silent) alert('取消に失敗しました。'); console.error(error); return; }
+      this.feePayments = this.feePayments.filter(p => !(p.memberId === memberId && p.period === this.feePeriod));
+      this.financeEntries = this.financeEntries.filter(e => !removedIds.includes(e.linkedFeePaymentId));
+    },
+
+    // ---- 帳簿(収入・支出) ----
+    get monthEntries() {
+      return this.financeEntries.filter(e => e.date && e.date.startsWith(this.feePeriod));
+    },
+    get monthIncome() { return this.monthEntries.filter(e=>e.type==='income').reduce((s,e)=>s+e.amount,0); },
+    get monthExpense() { return this.monthEntries.filter(e=>e.type==='expense').reduce((s,e)=>s+e.amount,0); },
+    // 全期間の記録から時系列で残高を積み上げる(帳簿の残高列に使用)
+    get ledgerWithBalance() {
+      const rows = this.financeEntries.slice().sort((a,b)=> a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
+      let bal = 0;
+      return rows.map(e => { bal += (e.type==='income' ? e.amount : -e.amount); return { ...e, balance: bal }; });
+    },
+    get totalBalance() {
+      const rows = this.ledgerWithBalance;
+      return rows.length ? rows[rows.length-1].balance : 0;
+    },
+    get ledgerRows() { return this.ledgerWithBalance.slice().reverse(); },
+    async addFinanceEntry() {
+      if (!this.newEntryAmount || this.newEntryAmount <= 0 || !this.newEntryDate) return;
+      const id = crypto.randomUUID();
+      const { error } = await sb.from('finance_entries').insert({
+        id, date: this.newEntryDate, type: this.newEntryType, category: this.newEntryCategory,
+        description: this.newEntryDescription, amount: this.newEntryAmount,
+      });
+      if (error) { alert('記録の追加に失敗しました。'); console.error(error); return; }
+      this.financeEntries.push({
+        id, date: this.newEntryDate, type: this.newEntryType, category: this.newEntryCategory,
+        description: this.newEntryDescription, amount: this.newEntryAmount,
+      });
+      this.newEntryDescription = ''; this.newEntryAmount = null;
+    },
+    async deleteFinanceEntry(id) {
+      const e = this.financeEntries.find(e => e.id === id);
+      if (!e) return;
+      if (!confirm('この記録を削除しますか?')) return;
+      const { error } = await sb.from('finance_entries').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      // 会費納付から自動生成された記録なら、納付記録側も一緒に取り消す
+      if (e.linkedFeePaymentId) {
+        await sb.from('fee_payments').delete().eq('id', e.linkedFeePaymentId);
+        this.feePayments = this.feePayments.filter(p => p.id !== e.linkedFeePaymentId);
+      }
+      this.financeEntries = this.financeEntries.filter(x => x.id !== id);
+    },
+
+    // ================= 試合結果 =================
+    teamScore(g) { return g.quarters.reduce((s,q)=>s+q.home, 0); },
+    oppScore(g) { return g.quarters.reduce((s,q)=>s+q.away, 0); },
+
+    // ---- ライブ配信(YouTube Liveは埋め込み再生、それ以外はリンクで開く) ----
+    get liveGames() { return this.games.filter(g => g.isLive && g.liveUrl); },
+    // ライブ・動画・写真のいずれかがある試合を新しい順にまとめた一覧(Band風の動画メニュー用)
+    get mediaGames() {
+      return this.games
+        .filter(g => g.liveUrl || g.videoUrl || g.photoUrl)
+        .sort((a,b) => b.date.localeCompare(a.date));
+    },
+    jumpToGameMedia(gameId) {
+      this.$nextTick(() => {
+        const el = document.getElementById('game_' + gameId);
+        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      });
+    },
+    goToVideoMenu() {
+      this.activeTab = 'results';
+      this.$nextTick(() => {
+        const el = document.getElementById('video-menu');
+        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      });
+    },
+    extractYouTubeId(url) {
+      if (!url) return null;
+      const m = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+      return m ? m[1] : null;
+    },
+    isYouTubeUrl(url) { return !!this.extractYouTubeId(url); },
+    youtubeEmbedUrl(url) {
+      const id = this.extractYouTubeId(url);
+      return id ? ('https://www.youtube.com/embed/' + id + '?autoplay=0') : '';
+    },
+    async toggleGameLive(id) {
+      const g = this.games.find(g => g.id === id);
+      if (!g) return;
+      if (!g.isLive && !g.liveUrl) { this.openLiveSetupModal(id); return; }
+      const { error } = await sb.from('game_media').update({ is_live: !g.isLive }).eq('game_id', id);
+      if (error) { alert('操作に失敗しました。'); console.error(error); return; }
+      g.isLive = !g.isLive;
+    },
+    // ライブ配信の開始・編集・削除は「配信管理」権限を持つメンバー(管理者含む)のみ操作できる。
+    // ボタン自体は isLiveManager で非表示にしているため、この関数はそこに依存している。
+    openLiveSetupModal(gameId) {
+      const g = this.games.find(g => g.id === gameId);
+      this.liveSetupGameId = gameId;
+      this.liveSetupUrl = (g && g.liveUrl) || '';
+      this.showLiveSetupModal = true;
+    },
+    async saveLiveSetup() {
+      const g = this.games.find(g => g.id === this.liveSetupGameId);
+      if (!g || !this.liveSetupUrl) return;
+      const { error } = await sb.from('game_media').update({ live_url: this.liveSetupUrl, is_live: true }).eq('game_id', g.id);
+      if (error) { alert('保存に失敗しました。'); console.error(error); return; }
+      g.liveUrl = this.liveSetupUrl;
+      g.isLive = true;
+      this.showLiveSetupModal = false;
+    },
+    async clearLiveUrl(gameId) {
+      const g = this.games.find(g => g.id === gameId);
+      if (!g) return;
+      if (!confirm('配信URLを削除しますか?配信中の場合は終了扱いになります。')) return;
+      const { error } = await sb.from('game_media').update({ live_url: '', is_live: false }).eq('game_id', gameId);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      g.liveUrl = '';
+      g.isLive = false;
+    },
+
+    // ---- 選手成績の集計・グラフ表示 ----
+    // 全試合の記録を選手ごとに合計する
+    playerSeasonTotal(playerId) {
+      const t = { pts:0, ast:0, reb:0, foul:0, fg2m:0, fg2a:0, fg3m:0, fg3a:0, ftm:0, fta:0, games:0 };
+      this.games.forEach(g => {
+        const s = g.playerStats && g.playerStats[playerId];
+        if (!s) return;
+        t.games++;
+        ['pts','ast','reb','foul','fg2m','fg2a','fg3m','fg3a','ftm','fta'].forEach(k => t[k] += s[k] || 0);
+      });
+      return t;
+    },
+    get seasonPlayerTotals() {
+      return this.players.map(p => ({ id:p.id, name:p.name, number:p.number, ...this.playerSeasonTotal(p.id) }));
+    },
+    avgStat(playerId, key) {
+      const t = this.playerSeasonTotal(playerId);
+      return t.games ? (t[key] / t.games).toFixed(1) : '0.0';
+    },
+    // 選手間の比較グラフ(結果タブに常時表示)
+    renderPlayerCompareChart() {
+      this.$nextTick(() => {
+        const canvas = document.getElementById('playerCompareChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        const totals = this.seasonPlayerTotals;
+        if (_charts.compare) _charts.compare.destroy();
+        _charts.compare = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: totals.map(p => '#'+p.number+' '+p.name),
+            datasets: [{ label: '合計PTS', data: totals.map(p => p.pts), backgroundColor: '#8b5cf6', borderRadius: 4 }],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display:false }, title: { display:true, text:'選手別 合計得点(比較)', font:{size:12} } },
+            scales: { y: { beginAtZero:true, ticks:{ precision:0 } } },
+          },
+        });
+      });
+    },
+    // 選手個人の詳細グラフ(名前タップで開くモーダル)
+    openPlayerDetail(playerId) {
+      this.detailPlayer = this.players.find(p => p.id === playerId) || null;
+      if (!this.detailPlayer) return;
+      this.showPlayerDetailModal = true;
+      this.$nextTick(() => this.renderPlayerDetailChart(playerId));
+    },
+    renderPlayerDetailChart(playerId) {
+      const canvas = document.getElementById('playerDetailChart');
+      if (!canvas || typeof Chart === 'undefined') return;
+      const t = this.playerSeasonTotal(playerId);
+      if (_charts.detail) _charts.detail.destroy();
+      _charts.detail = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: ['PTS','AST','REB','Foul'],
+          datasets: [{ data: [t.pts, t.ast, t.reb, t.foul], backgroundColor: ['#8b5cf6','#f59e0b','#14b8a6','#ef4444'], borderRadius:4 }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display:false }, title: { display:true, text:'全試合合計', font:{size:12} } },
+          scales: { y: { beginAtZero:true, ticks:{ precision:0 } } },
+        },
+      });
+    },
+    openGameModal(g) {
+      this.editingGame = g ? { ...g } : {
+        id:null, opponent:'', date:'', place:'', videoUrl:'', photoUrl:'', liveUrl:'', isLive:false, finished:false,
+        quarters:[{home:0,away:0},{home:0,away:0},{home:0,away:0},{home:0,away:0}],
+        playerStats:{}, log:[],
+      };
+      this.showGameModal = true;
+    },
+    async saveGame() {
+      if (!this.editingGame.opponent || !this.editingGame.date) return;
+      const g = this.editingGame;
+      if (g.id) {
+        // 既存試合の編集: 基本情報はgamesへ、動画/配信URLはgame_mediaへ
+        const [{ error: gErr }, { error: mErr }] = await Promise.all([
+          sb.from('games').update({
+            opponent: g.opponent, date: g.date, place: g.place || '',
+            category: g.category || null, round_label: g.roundLabel || null, finished: !!g.finished,
+          }).eq('id', g.id),
+          sb.from('game_media').upsert({
+            game_id: g.id, video_url: g.videoUrl || '', photo_url: g.photoUrl || '', live_url: g.liveUrl || '', is_live: !!g.isLive,
+          }),
+        ]);
+        if (gErr || mErr) { alert('保存に失敗しました。'); console.error(gErr || mErr); return; }
+        const idx = this.games.findIndex(x => x.id === g.id);
+        this.games[idx] = { ...g };
+      } else {
+        // 新規試合の作成: 3表すべてに初期行を作る
+        const { data: gameRow, error: gErr } = await sb.from('games').insert({
+          opponent: g.opponent, date: g.date, place: g.place || '', finished: false,
+        }).select().single();
+        if (gErr || !gameRow) { alert('保存に失敗しました。'); console.error(gErr); return; }
+        const { error: mErr } = await sb.from('game_media').insert({
+          game_id: gameRow.id, video_url: g.videoUrl || '', photo_url: g.photoUrl || '', live_url: g.liveUrl || '', is_live: !!g.isLive,
+        });
+        await sb.from('game_live_stats').insert({ game_id: gameRow.id });
+        if (mErr) { alert('保存に失敗しました。'); console.error(mErr); return; }
+        this.games.push({ ...g, id: gameRow.id });
+      }
+      this.showGameModal = false;
+    },
+    async deleteGame(id) {
+      if (!confirm('この試合を削除しますか?')) return;
+      const { error } = await sb.from('games').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      this.games = this.games.filter(g => g.id !== id);
+    },
+    async finishGame() {
+      if (!this.liveGame) return;
+      if (!confirm('試合を保存して終了しますか?記録したスタッツが結果画面に確定表示されます。')) return;
+      const { error } = await sb.from('games').update({ finished: true }).eq('id', this.liveGame.id);
+      if (error) { alert('保存に失敗しました。'); console.error(error); return; }
+      this.liveGame.finished = true;
+      this.activeTab = 'results';
+    },
+    async reopenGame() {
+      if (!this.liveGame) return;
+      const { error } = await sb.from('games').update({ finished: false }).eq('id', this.liveGame.id);
+      if (error) { alert('操作に失敗しました。'); console.error(error); return; }
+      this.liveGame.finished = false;
+    },
+
+    // ================= リアルタイムスタッツ =================
+    // スタッツは「① 日程(スケジュールに登録された公式戦・カップ戦・練習試合)」→「② 対戦相手」の2段階で選ぶ
+    get statsEvent() {
+      if (!this.statsEventKey) return null;
+      return this.scheduleDays.find(d => d.date === this.statsEventKey) || null;
+    },
+    onStatsEventChange() {
+      const ev = this.statsEvent;
+      // 対戦相手が1つだけなら自動で選択する
+      this.liveGameId = (ev && ev.opponents && ev.opponents.length === 1) ? ev.opponents[0].gameId : '';
+    },
+    get liveGame() {
+      return this.games.find(g => String(g.id) === String(this.liveGameId)) || null;
+    },
+    playerStat(game, playerId) {
+      return game.playerStats[playerId] || { pts:0,ast:0,reb:0,foul:0,fg2m:0,fg2a:0,fg3m:0,fg3a:0,ftm:0,fta:0 };
+    },
+    // その時点のクォーター別得点・個人スタッツ・取消用ログをまとめてSupabaseへ書き込む
+    async syncGameLiveStats(g) {
+      const { error } = await sb.from('game_live_stats')
+        .update({ quarters: g.quarters, player_stats: g.playerStats, log: g.log })
+        .eq('game_id', g.id);
+      if (error) console.error('スタッツの保存に失敗しました', error);
+    },
+    // シュート系(2P/3P/FT): 「成功」も必ず試投数(a)を1つ増やし、成功時のみ成功数(m)も増やす。
+    // こうしないと「成功数 > 試投数」という矛盾したスタッツになってしまう。
+    async recordShot(shotType, made) {
+      if (!this.liveGame) return;
+      if (!this.selectedPlayerId) { this.statMessage = '先に選手を選択してください。'; setTimeout(()=>this.statMessage='',2000); return; }
+      const g = this.liveGame;
+      if (!g.playerStats[this.selectedPlayerId]) {
+        g.playerStats[this.selectedPlayerId] = { pts:0,ast:0,reb:0,foul:0,fg2m:0,fg2a:0,fg3m:0,fg3a:0,ftm:0,fta:0 };
+      }
+      const stat = g.playerStats[this.selectedPlayerId];
+      const attemptKey = shotType + 'a'; // fg2a / fg3a / fta
+      const makeKey = shotType + 'm';    // fg2m / fg3m / ftm
+      stat[attemptKey] = (stat[attemptKey] || 0) + 1;
+      let points = 0;
+      if (made) {
+        stat[makeKey] = (stat[makeKey] || 0) + 1;
+        points = shotType === 'fg2' ? 2 : shotType === 'fg3' ? 3 : 1;
+        stat.pts += points;
+        g.quarters[this.currentQuarter].home += points;
+      }
+      g.log.push({ kind:'shot', playerId:this.selectedPlayerId, shotType, made, points, quarter:this.currentQuarter, time:Date.now() });
+      await this.syncGameLiveStats(g);
+    },
+    // AST・REB・ファウルなど、成功/失敗の概念がない単純カウント系のスタッツ
+    async recordSimpleStat(action) {
+      if (!this.liveGame) return;
+      if (!this.selectedPlayerId) { this.statMessage = '先に選手を選択してください。'; setTimeout(()=>this.statMessage='',2000); return; }
+      const g = this.liveGame;
+      if (!g.playerStats[this.selectedPlayerId]) {
+        g.playerStats[this.selectedPlayerId] = { pts:0,ast:0,reb:0,foul:0,fg2m:0,fg2a:0,fg3m:0,fg3a:0,ftm:0,fta:0 };
+      }
+      const stat = g.playerStats[this.selectedPlayerId];
+      stat[action] = (stat[action] || 0) + 1;
+      g.log.push({ kind:'simple', playerId:this.selectedPlayerId, action, quarter:this.currentQuarter, time:Date.now() });
+      await this.syncGameLiveStats(g);
+    },
+    async addOpponentScore(points) {
+      if (!this.liveGame) return;
+      const g = this.liveGame;
+      g.quarters[this.currentQuarter].away += points;
+      g.log.push({ kind:'opp', points, quarter:this.currentQuarter, time:Date.now() });
+      await this.syncGameLiveStats(g);
+    },
+    async undoLastStat() {
+      const g = this.liveGame;
+      if (!g || g.log.length === 0) return;
+      const last = g.log.pop();
+      if (last.kind === 'opp') {
+        g.quarters[last.quarter].away -= last.points;
+      } else if (last.kind === 'shot') {
+        const stat = g.playerStats[last.playerId];
+        const attemptKey = last.shotType + 'a';
+        const makeKey = last.shotType + 'm';
+        stat[attemptKey] = Math.max(0, (stat[attemptKey]||0) - 1);
+        if (last.made) {
+          stat[makeKey] = Math.max(0, (stat[makeKey]||0) - 1);
+          stat.pts -= last.points;
+          g.quarters[last.quarter].home -= last.points;
+        }
+      } else if (last.kind === 'simple') {
+        const stat = g.playerStats[last.playerId];
+        stat[last.action] = Math.max(0, (stat[last.action]||0) - 1);
+      }
+      await this.syncGameLiveStats(g);
+    },
+
+    // ================= 管理: メンバー承認 =================
+    get pendingMembers() { return this.members.filter(m => m.status === 'pending'); },
+    async approveMember(id) {
+      const { error } = await sb.from('users').update({ status: 'approved' }).eq('id', id);
+      if (error) { alert('承認処理に失敗しました。'); return; }
+      const m = this.members.find(m => m.id === id);
+      if (m) m.status = 'approved';
+    },
+    async rejectMember(id) {
+      if (!confirm('この登録を却下(削除)しますか?')) return;
+      const { error } = await sb.from('users').delete().eq('id', id);
+      if (error) { alert('却下処理に失敗しました。'); return; }
+      this.members = this.members.filter(m => m.id !== id);
+    },
+
+    // ================= 管理: 利用停止・完全削除 =================
+    // 承認済み・停止中の家庭一覧(管理者自身は対象外)
+    get approvedAndSuspendedMembers() {
+      return this.members.filter(m => (m.status === 'approved' || m.status === 'suspended') && m.role !== 'admin');
+    },
+    // 退部・卒部・規約違反などでアクセスを止めたい場合の「利用停止」。
+    // 過去の試合・出欠・配車・会計等のデータは一切削除せず、そのまま残す。
+    async toggleMemberSuspend(id) {
+      const m = this.members.find(m => m.id === id);
+      if (!m || m.role === 'admin') return;
+      if (m.status === 'suspended') {
+        if (!confirm(m.name + '家の利用を再開しますか?')) return;
+        const { error } = await sb.from('users').update({ status: 'approved' }).eq('id', id);
+        if (error) { alert('処理に失敗しました。'); return; }
+        m.status = 'approved';
+      } else {
+        if (!confirm(m.name + '家をアクセス停止にします。ログインできなくなりますが、過去のデータは保持されます。よろしいですか?')) return;
+        const { error } = await sb.from('users').update({ status: 'suspended' }).eq('id', id);
+        if (error) { alert('処理に失敗しました。'); return; }
+        m.status = 'suspended';
+        if (this.currentUser && this.currentUser.id === id) { this.currentUser = null; await sb.auth.signOut(); }
+      }
+    },
+    // ログインアカウントのプロフィール(users行)を完全に削除する。
+    // 「利用停止」とは別の操作とし、誤操作防止のため二重に確認する。
+    // 試合・スタッツ・出欠・配車などの過去の記録はこの操作では削除されない。
+    // 【既知の制約】Supabase Auth側の認証エントリ自体はブラウザから削除できないため(service_role権限が必要)、
+    // この操作は「アプリのプロフィールを消してログイン不可にする」までを行う。認証エントリそのものの削除は
+    // 将来サーバー側の処理(Edge Function等)を導入する際の検討課題とする。
+    async deleteMemberPermanently(id) {
+      const m = this.members.find(m => m.id === id);
+      if (!m) return;
+      if (m.role === 'admin') { alert('管理者アカウントは削除できません。'); return; }
+      if (!confirm(m.name + '家のログイン情報を完全に削除します。この操作は取り消せません。\n(試合・スタッツなど過去の記録は削除されません)\n\n本当によろしいですか?')) return;
+      if (!confirm('もう一度確認します。本当に削除してよろしいですか?')) return;
+      const { error } = await sb.from('users').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); return; }
+      this.members = this.members.filter(mm => mm.id !== id);
+      if (this.currentUser && this.currentUser.id === id) { this.currentUser = null; await sb.auth.signOut(); }
+    },
+
+    // ================= 管理: 選手ロスター =================
+    async addPlayer() {
+      if (!this.newPlayerName) return;
+      const { data, error } = await sb.from('players')
+        .insert({ club_id: CLUB_ID, family_id: null, name: this.newPlayerName, number: this.newPlayerNumber ? String(this.newPlayerNumber) : null, status: 'active' })
+        .select().single();
+      if (error || !data) { alert('選手の追加に失敗しました。'); return; }
+      this.players.push({ id: data.id, number: data.number || '', name: data.name, status: data.status });
+      this.newPlayerNumber=''; this.newPlayerName='';
+    },
+    // 現在の在籍中の選手のみ(スタッツ記録時の選手選択などに使用)。
+    // 卒部・退部した選手は一覧からは外すが、過去の試合記録からは削除しない。
+    get activePlayers() {
+      return this.players.filter(p => (p.status || 'active') === 'active');
+    },
+    // 卒部・退部・在籍中の切り替え。過去の試合・スタッツはそのまま残る。
+    async setPlayerStatus(id, status) {
+      const p = this.players.find(p => p.id === id);
+      if (!p) return;
+      const { error } = await sb.from('players').update({ status }).eq('id', id);
+      if (error) { alert('在籍状態の更新に失敗しました。'); return; }
+      p.status = status;
+    },
+    async removePlayer(id) {
+      // 試合記録(スタッツ)が残っている選手は、完全削除すると過去の記録が壊れてしまうため削除させない。
+      // 卒部・退部の場合は setPlayerStatus() で在籍状態を変えるよう案内する。
+      const hasHistory = this.games.some(g => g.playerStats && g.playerStats[id]);
+      if (hasHistory) {
+        alert('この選手には試合の記録が残っているため、完全に削除することはできません。「卒部」または「退部」の状態に変更してください。');
+        return;
+      }
+      if (!confirm('この選手をロスターから削除しますか?')) return;
+      const { error } = await sb.from('players').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); return; }
+      this.players = this.players.filter(p => p.id !== id);
+    },
+  };
+}
+</script>
+</body>
+</html>
