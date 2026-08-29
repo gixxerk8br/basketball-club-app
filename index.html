@@ -417,7 +417,7 @@
         <label class="text-xs font-medium text-slate-500">対象の日程を選択</label>
         <select x-model="carpoolEventKey" @change="onCarpoolEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
           <option value="">-- 日程を選択 --</option>
-          <template x-for="ev in gameAgendaEvents" :key="ev.date">
+          <template x-for="ev in carpoolAgendaEvents" :key="ev.date">
             <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
           </template>
         </select>
@@ -2214,11 +2214,21 @@ function app() {
         }))
         .sort((a,b)=>a.date.localeCompare(b.date));
     },
-    // 試合(公式戦・カップ戦・練習試合)として対戦相手が登録されている日程だけを抽出(配車・スタッツ選択用)
+    // 試合(公式戦・カップ戦・練習試合)として対戦相手が登録されている日程だけを抽出(スタッツ選択用)
+    // スタッツは対戦相手ごとに試合記録(games)を紐付けて記録するため、対戦相手が未登録の日程は選べない
     get gameAgendaEvents() {
       return this.scheduleDays
         .filter(d => d.opponents && d.opponents.length)
         .map(d => ({ date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents }))
+        .sort((a,b)=>b.date.localeCompare(a.date));
+    },
+    // 練習・休み以外の「出かける予定」をすべて抽出(配車選択用)。
+    // 配車は対戦相手が未定(組み合わせ抽選前など)でも出欠・配車の調整自体はできるべきなので、
+    // gameAgendaEventsと違い、対戦相手(opponents)の有無は問わない(CSV一括取り込みした日程も含まれる)
+    get carpoolAgendaEvents() {
+      return this.scheduleDays
+        .filter(d => d.dayType && d.dayType !== '練習' && d.dayType !== '休み')
+        .map(d => ({ date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents||[] }))
         .sort((a,b)=>b.date.localeCompare(a.date));
     },
     myEventAttendance(ev) {
