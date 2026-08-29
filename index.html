@@ -282,7 +282,7 @@
             <div class="bg-slate-50 rounded-lg px-3 py-2">
               <div class="flex items-center justify-between">
                 <div>
-                  <p class="text-sm font-semibold" x-text="ev.dayType + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
+                  <p class="text-sm font-semibold" x-text="ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
                   <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '')"></p>
                 </div>
                 <span x-show="ev.dayType!=='練習'" class="text-xs font-bold" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
@@ -323,7 +323,7 @@
               <span class="text-[11px] font-bold" :class="cell.dow===0 ? 'text-red-400' : cell.dow===6 ? 'text-blue-400' : 'text-slate-500'" x-text="cell.d"></span>
               <span x-show="cell.day && cell.day.duty" class="text-[9px] leading-tight rounded px-1 py-0.5 bg-teal-500 text-white truncate" x-text="cell.day && cell.day.duty"></span>
               <span x-show="cell.day && cell.day.dayType" class="text-[9px] leading-tight rounded px-1 py-0.5 text-white truncate" :class="dayTypeColor(cell.day && cell.day.dayType)" x-text="cell.day && cell.day.dayType"></span>
-              <span x-show="cell.day && cell.day.memo" class="text-[9px] leading-tight text-slate-400 truncate" x-text="cell.day && cell.day.memo"></span>
+              <span x-show="cell.day && (cell.day.eventName || cell.day.memo)" class="text-[9px] leading-tight text-slate-400 truncate" x-text="cell.day && (cell.day.eventName || cell.day.memo)"></span>
             </button>
           </template>
         </div>
@@ -346,7 +346,7 @@
           <template x-for="ev in agendaEvents" :key="ev.date">
             <div class="border border-slate-100 rounded-xl p-3">
               <div class="flex items-center justify-between gap-2">
-                <p class="font-semibold text-sm" x-text="ev.dayType + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
+                <p class="font-semibold text-sm" x-text="ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
               </div>
               <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '') + (ev.place ? ' ・会場📍' + ev.place : '')"></p>
               <p class="text-xs text-slate-400 mb-2" x-show="ev.memo" x-text="ev.memo"></p>
@@ -401,8 +401,8 @@
       <!-- 一括取り込み(管理者のみ) -->
       <div x-show="isAdmin" class="bg-white rounded-2xl shadow-sm p-5">
         <h3 class="font-bold text-sm mb-2">📥 カレンダーの一括取り込み</h3>
-        <p class="text-xs text-slate-400 mb-2">1行につき1日分、<b>日付,当番,種類(練習/公式戦/カップ戦/練習試合/休み),会場,集合場所,集合時間,メモ</b> のカンマ区切りで貼り付けてください。</p>
-        <textarea x-model="csvImportText" rows="4" placeholder="例)&#10;2026-09-20,浦辻,公式戦,市民体育館,学校駐車場,09:30,秋季大会予選"
+        <p class="text-xs text-slate-400 mb-2">1行につき1日分、<b>日付,当番,種類(練習/公式戦/カップ戦/練習試合/休み),会場,集合場所,集合時間,メモ,予定</b> のカンマ区切りで貼り付けてください(「予定」は末尾・省略可)。</p>
+        <textarea x-model="csvImportText" rows="4" placeholder="例)&#10;2026-09-20,浦辻,公式戦,市民体育館,学校駐車場,09:30,,秋季大会予選"
           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-600"></textarea>
         <button @click="importScheduleCSV()" class="tap-btn mt-2 bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-lg">取り込む</button>
         <p x-show="csvImportMessage" x-text="csvImportMessage" class="text-xs text-emerald-600 mt-2"></p>
@@ -418,7 +418,7 @@
         <select x-model="carpoolEventKey" @change="onCarpoolEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
           <option value="">-- 日程を選択 --</option>
           <template x-for="ev in carpoolAgendaEvents" :key="ev.date">
-            <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
+            <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
           </template>
         </select>
         <p class="text-[11px] text-slate-400 mt-1">配車はカップ戦などで対戦相手が複数あっても、日程ごとに1回だけ回答します。</p>
@@ -726,7 +726,7 @@
           <select x-model="statsEventKey" @change="onStatsEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
             <option value="">-- 日程を選択 --</option>
             <template x-for="ev in gameAgendaEvents" :key="ev.date">
-              <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
+              <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
             </template>
           </select>
         </div>
@@ -1204,7 +1204,8 @@
     <template x-if="!isAdmin">
       <div class="space-y-2 text-sm">
         <p x-show="editingDay.duty"><span class="font-semibold">当番:</span> <span x-text="editingDay.duty"></span></p>
-        <p x-show="editingDay.dayType"><span class="font-semibold">予定:</span> <span x-text="editingDay.dayType"></span></p>
+        <p x-show="editingDay.dayType"><span class="font-semibold">予定の種類:</span> <span x-text="editingDay.dayType"></span></p>
+        <p x-show="editingDay.eventName"><span class="font-semibold">予定:</span> <span x-text="editingDay.eventName"></span></p>
         <p x-show="editingDay.place"><span class="font-semibold">会場:</span> <span x-text="editingDay.place"></span></p>
         <p x-show="editingDay.meetPlace || editingDay.meetTime"><span class="font-semibold">集合場所/時間:</span>
           <span x-text="editingDay.meetPlace"></span> <span x-text="editingDay.meetTime"></span></p>
@@ -1229,7 +1230,7 @@
             </template>
           </div>
         </div>
-        <p x-show="!editingDay.duty && !editingDay.dayType && !editingDay.memo" class="text-slate-400">この日の予定はまだ登録されていません。</p>
+        <p x-show="!editingDay.duty && !editingDay.dayType && !editingDay.eventName && !editingDay.memo" class="text-slate-400">この日の予定はまだ登録されていません。</p>
       </div>
     </template>
 
@@ -1252,6 +1253,11 @@
             <option value="休み">休み</option>
           </select>
           <p class="text-[11px] text-slate-400 mt-1" x-show="!editingDay.dayType && editingDay.duty">種類を選ばなくても、当番が入っていれば「練習」の日として扱われます。</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium text-slate-500">予定</label>
+          <input type="text" x-model="editingDay.eventName" placeholder="例)玉吉カップ" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
         </div>
 
         <template x-if="['公式戦','カップ戦','練習試合'].includes(editingDay.dayType)">
@@ -1306,7 +1312,7 @@
 
         <div>
           <label class="text-xs font-medium text-slate-500">メモ</label>
-          <textarea x-model="editingDay.memo" rows="2" placeholder="自由記入(大会名・持ち物・注意事項など)" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></textarea>
+          <textarea x-model="editingDay.memo" rows="2" placeholder="自由記入(持ち物・注意事項など)" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></textarea>
         </div>
 
         <div>
@@ -1509,7 +1515,7 @@ function app() {
     // カレンダー・当番編集
     calendarYear: 2026, calendarMonth: 7, // 0=1月 なので 7=8月
     showDayModal:false,
-    editingDay:{ date:'', duty:'', dayType:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] },
+    editingDay:{ date:'', duty:'', dayType:'', eventName:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] },
     newOpponentInput:'',
     // 会計・帳簿(会計担当者専用)
     financeSettings: { monthlyFee: 3000 },
@@ -1632,7 +1638,7 @@ function app() {
         (carpoolAssignmentRows || []).filter(a => a.date === d.date).forEach(a => { carpoolAssignments[a.person_id] = a.driver_user_id; });
         const carpoolSpotRiders = (spotRiderRows || []).filter(s => s.date === d.date).map(s => ({ id: s.id, name: s.name }));
         return {
-          id: 'day_' + d.date, date: d.date, duty: d.duty || '', dayType: d.day_type || '',
+          id: 'day_' + d.date, date: d.date, duty: d.duty || '', dayType: d.day_type || '', eventName: d.event_name || '',
           meetPlace: d.meet_place || '', meetTime: d.meet_time || '', place: d.place || '', memo: d.memo || '',
           opponents: d.opponents || [], materials: d.materials || [],
           attendance, carpoolResponses, carpoolAssignments, carpoolSpotRiders,
@@ -1890,13 +1896,15 @@ function app() {
     },
     // 「日付,当番,種類,会場,集合場所,集合時間,メモ」形式のテキストを日程データに変換(管理画面からの一括取り込み用)
     parseCalendarText(text) {
+      // 「予定」列は末尾に追加した(以前の7列形式のCSVをそのまま貼り付けても列がズレて
+      // データが壊れないようにするため。8列目が無ければeventNameは空欄になるだけで安全)
       return text.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
         const parts = line.split(',').map(s => (s || '').trim());
-        const [date, duty, dayType, place, meetPlace, meetTime, memo] = parts;
+        const [date, duty, dayType, place, meetPlace, meetTime, memo, eventName] = parts;
         if (!date) return null;
         return {
           id: 'day_' + date, date, duty: duty || '',
-          dayType: dayType || '', meetPlace: meetPlace || '', meetTime: meetTime || '', place: place || '', memo: memo || '',
+          dayType: dayType || '', eventName: eventName || '', meetPlace: meetPlace || '', meetTime: meetTime || '', place: place || '', memo: memo || '',
           opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[],
         };
       }).filter(Boolean);
@@ -2126,7 +2134,7 @@ function app() {
       const existing = this.getDay(dateStr);
       this.editingDay = existing
         ? JSON.parse(JSON.stringify(existing))
-        : { id:'day_'+dateStr, date:dateStr, duty:'', dayType:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] };
+        : { id:'day_'+dateStr, date:dateStr, duty:'', dayType:'', eventName:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] };
       // 古い日程データには materials フィールドが無い場合があるため、常に配列であることを保証する
       if (!this.editingDay.materials) this.editingDay.materials = [];
       this.newOpponentInput = '';
@@ -2147,7 +2155,7 @@ function app() {
         if (o.gameId) continue;
         const { data: gameRow, error } = await sb.from('games').insert({
           opponent: o.name, date: day.date, place: day.place || '',
-          category: day.dayType, round_label: day.memo || day.dayType, finished: false,
+          category: day.dayType, round_label: day.eventName || day.memo || day.dayType, finished: false,
         }).select().single();
         if (error || !gameRow) { console.error('試合の自動作成に失敗しました', error); continue; }
         await Promise.all([
@@ -2157,7 +2165,7 @@ function app() {
         const newGame = {
           id: gameRow.id,
           opponent: o.name, date: day.date, place: day.place || '', finished:false,
-          category: day.dayType, roundLabel: day.memo || day.dayType, videoUrl:'', photoUrl:'', liveUrl:'', isLive:false,
+          category: day.dayType, roundLabel: day.eventName || day.memo || day.dayType, videoUrl:'', photoUrl:'', liveUrl:'', isLive:false,
           quarters:[{home:0,away:0},{home:0,away:0},{home:0,away:0},{home:0,away:0}],
           playerStats:{}, log:[],
         };
@@ -2174,6 +2182,7 @@ function app() {
         date: this.editingDay.date,
         duty: this.editingDay.duty || null,
         day_type: this.editingDay.dayType || null,
+        event_name: this.editingDay.eventName || null,
         meet_place: this.editingDay.meetPlace || null,
         meet_time: this.editingDay.meetTime || null,
         place: this.editingDay.place || null,
@@ -2208,7 +2217,7 @@ function app() {
       return this.scheduleDays
         .filter(d => d.date >= today && d.dayType && d.dayType !== '休み')
         .map(d => ({
-          date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', memo:d.memo||'',
+          date:d.date, dayType:d.dayType, eventName:d.eventName||'', meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', memo:d.memo||'',
           opponents:d.opponents||[], attendance:d.attendance||{}, carpoolResponses:d.carpoolResponses||{}, materials:d.materials||[],
         }))
         .sort((a,b)=>a.date.localeCompare(b.date));
@@ -2218,7 +2227,7 @@ function app() {
     get gameAgendaEvents() {
       return this.scheduleDays
         .filter(d => d.opponents && d.opponents.length)
-        .map(d => ({ date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents }))
+        .map(d => ({ date:d.date, dayType:d.dayType, eventName:d.eventName||'', meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents }))
         .sort((a,b)=>b.date.localeCompare(a.date));
     },
     // 練習・休み以外の「出かける予定」をすべて抽出(配車選択用)。
@@ -2227,7 +2236,7 @@ function app() {
     get carpoolAgendaEvents() {
       return this.scheduleDays
         .filter(d => d.dayType && d.dayType !== '練習' && d.dayType !== '休み')
-        .map(d => ({ date:d.date, dayType:d.dayType, meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents||[] }))
+        .map(d => ({ date:d.date, dayType:d.dayType, eventName:d.eventName||'', meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents||[] }))
         .sort((a,b)=>b.date.localeCompare(a.date));
     },
     myEventAttendance(ev) {
@@ -2269,7 +2278,7 @@ function app() {
       const days = this.parseCalendarText(this.csvImportText);
       for (const d of days) {
         const { error } = await sb.from('schedule_days').upsert({
-          date: d.date, duty: d.duty || null, day_type: d.dayType || null,
+          date: d.date, duty: d.duty || null, day_type: d.dayType || null, event_name: d.eventName || null,
           meet_place: d.meetPlace || null, meet_time: d.meetTime || null,
           place: d.place || null, memo: d.memo || null,
         });
@@ -2278,7 +2287,7 @@ function app() {
         if (idx >= 0) {
           // CSVに無い項目(出欠・配車・対戦相手・資料)は既存のものを保持する
           const existing = this.scheduleDays[idx];
-          this.scheduleDays[idx] = { ...existing, duty: d.duty, dayType: d.dayType, meetPlace: d.meetPlace, meetTime: d.meetTime, place: d.place, memo: d.memo };
+          this.scheduleDays[idx] = { ...existing, duty: d.duty, dayType: d.dayType, eventName: d.eventName, meetPlace: d.meetPlace, meetTime: d.meetTime, place: d.place, memo: d.memo };
         } else {
           this.scheduleDays.push(d);
         }
