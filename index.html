@@ -1208,18 +1208,17 @@
         <p x-show="editingDay.place"><span class="font-semibold">会場:</span> <span x-text="editingDay.place"></span></p>
         <p x-show="editingDay.meetPlace || editingDay.meetTime"><span class="font-semibold">集合場所/時間:</span>
           <span x-text="editingDay.meetPlace"></span> <span x-text="editingDay.meetTime"></span></p>
-        <div x-show="editingDay.opponents && editingDay.opponents.length">
-          <p><span class="font-semibold">対戦相手:</span> <span x-text="editingDay.opponents.map(o=>o.name).join('、')"></span></p>
-          <div class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
-              <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(editingDay)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
-                x-text="myCarpoolStatusForDay(editingDay)"></span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1"
-              x-text="'配車可能 ' + carpoolCountsForDay(editingDay).canDrive + '家族 / 配車が必要 ' + carpoolCountsForDay(editingDay).needRide + '家族(回答 ' + carpoolCountsForDay(editingDay).total + '家族)'"></p>
-            <button @click="goToCarpool(editingDay.date)" class="tap-btn text-[11px] text-violet-800 font-semibold mt-1.5">配車の詳細・回答はこちら →</button>
+        <p x-show="editingDay.opponents && editingDay.opponents.length"><span class="font-semibold">対戦相手:</span> <span x-text="editingDay.opponents.map(o=>o.name).join('、')"></span></p>
+        <!-- 配車は対戦相手が未登録(組み合わせ抽選前など)でも調整できるため、練習・休み以外なら常に表示する -->
+        <div x-show="['公式戦','カップ戦','練習試合'].includes(editingDay.dayType)" class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
+            <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(editingDay)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
+              x-text="myCarpoolStatusForDay(editingDay)"></span>
           </div>
+          <p class="text-[11px] text-slate-400 mt-1"
+            x-text="'配車可能 ' + carpoolCountsForDay(editingDay).canDrive + '家族 / 配車が必要 ' + carpoolCountsForDay(editingDay).needRide + '家族(回答 ' + carpoolCountsForDay(editingDay).total + '家族)'"></p>
+          <button @click="goToCarpool(editingDay.date)" class="tap-btn text-[11px] text-violet-800 font-semibold mt-1.5">配車の詳細・回答はこちら →</button>
         </div>
         <p x-show="editingDay.memo"><span class="font-semibold">メモ:</span> <span x-text="editingDay.memo"></span></p>
         <div x-show="editingDay.materials && editingDay.materials.length">
@@ -1290,8 +1289,8 @@
               </div>
               <p class="text-[11px] text-slate-400 mt-1">登録すると、保存時に試合結果・スタッツ・配車から選べるようになります。</p>
 
-              <!-- 保存済みの対戦相手があれば配車の状況もその場で表示 -->
-              <div x-show="editingDay.opponents.some(o=>o.gameId)" class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
+              <!-- 配車の状況をその場で表示(対戦相手が未登録でも、公式戦・カップ戦・練習試合なら配車は調整できる) -->
+              <div class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] text-slate-500">🚗 わが家の配車</span>
                   <span class="text-[11px] font-bold" :class="myCarpoolStatusForDay(editingDay)==='未回答' ? 'text-orange-600' : 'text-slate-700'"
