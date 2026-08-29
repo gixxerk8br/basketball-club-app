@@ -2277,17 +2277,21 @@ function app() {
     async importScheduleCSV() {
       const days = this.parseCalendarText(this.csvImportText);
       for (const d of days) {
-        const { error } = await sb.from('schedule_days').upsert({
-          date: d.date, duty: d.duty || null, day_type: d.dayType || null, event_name: d.eventName || null,
+        // event_name(予定)は8列目・省略可の列のため、CSVの行に無ければキー自体を送らない
+        // (event_name: null を明示的に送るとupsertで既存の値が消えてしまうため)
+        const payload = {
+          date: d.date, duty: d.duty || null, day_type: d.dayType || null,
           meet_place: d.meetPlace || null, meet_time: d.meetTime || null,
           place: d.place || null, memo: d.memo || null,
-        });
+        };
+        if (d.eventName) payload.event_name = d.eventName;
+        const { error } = await sb.from('schedule_days').upsert(payload);
         if (error) { console.error('日程の取り込みに失敗しました', d.date, error); continue; }
         const idx = this.scheduleDays.findIndex(x => x.date === d.date);
         if (idx >= 0) {
-          // CSVに無い項目(出欠・配車・対戦相手・資料)は既存のものを保持する
+          // CSVに無い項目(出欠・配車・対戦相手・資料・予定が省略された場合の予定)は既存のものを保持する
           const existing = this.scheduleDays[idx];
-          this.scheduleDays[idx] = { ...existing, duty: d.duty, dayType: d.dayType, eventName: d.eventName, meetPlace: d.meetPlace, meetTime: d.meetTime, place: d.place, memo: d.memo };
+          this.scheduleDays[idx] = { ...existing, duty: d.duty, dayType: d.dayType, eventName: d.eventName || existing.eventName, meetPlace: d.meetPlace, meetTime: d.meetTime, place: d.place, memo: d.memo };
         } else {
           this.scheduleDays.push(d);
         }
