@@ -1332,7 +1332,7 @@
                   <span class="bg-slate-100 text-xs rounded-full px-2 py-1 flex items-center gap-1">
                     <span x-text="o.name"></span>
                     <span x-show="opponentScoreLabel(o.gameId)" class="font-bold text-violet-800" x-text="'(' + opponentScoreLabel(o.gameId) + ')'"></span>
-                    <button @click="editingDay.opponents.splice(oi,1)" class="tap-btn text-slate-400 hover:text-red-500">×</button>
+                    <button @click="removeOpponent(oi)" class="tap-btn text-slate-400 hover:text-red-500">×</button>
                   </span>
                 </template>
               </div>
@@ -2205,6 +2205,21 @@ function app() {
       if (!this.editingDay.opponents) this.editingDay.opponents = [];
       this.editingDay.opponents.push({ name, gameId:null });
       this.newOpponentInput = '';
+    },
+    // 対戦相手を削除する。すでに試合記録(games)が作成済み(gameIdがある)場合は、
+    // 紐づく試合結果・スタッツ(game_media/game_live_statsはon delete cascadeで自動削除)も
+    // 一緒に削除する。そうしないと、スケジュールから対戦相手を消してもスタッツ・結果に
+    // 残り続けてしまうため。記録が消えるため、確認ダイアログを挟む。
+    async removeOpponent(oi) {
+      const o = this.editingDay.opponents[oi];
+      if (!o) return;
+      if (o.gameId) {
+        if (!confirm(o.name + '戦の試合結果・スタッツの記録もすべて削除されます。よろしいですか?')) return;
+        const { error } = await sb.from('games').delete().eq('id', o.gameId);
+        if (error) { alert('試合記録の削除に失敗しました。'); console.error(error); return; }
+        this.games = this.games.filter(g => String(g.id) !== String(o.gameId));
+      }
+      this.editingDay.opponents.splice(oi, 1);
     },
     // 登録された対戦相手ごとに、保存時に「試合」レコードを自動作成し、結果・スタッツから参照できるようにする
     async linkGamesForDay(day) {
