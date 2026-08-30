@@ -43,12 +43,14 @@ Deno.serve(async (req) => {
       `${SUPABASE_URL}/rest/v1/notification_preferences?notify_announcements=eq.false&select=user_id`,
       { headers },
     );
+    if (!offRes.ok) throw new Error(`notification_preferences fetch failed (${offRes.status}): ${await offRes.text()}`);
     const offRows: { user_id: string }[] = await offRes.json();
     const offUserIds = new Set(offRows.map((r) => r.user_id));
 
     // 登録されている購読(端末)を全件取得し、オフにしている人を除外する
     // (notification_preferencesに行が無い人は「初期値=オン」として扱う)
     const subRes = await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?select=*`, { headers });
+    if (!subRes.ok) throw new Error(`push_subscriptions fetch failed (${subRes.status}): ${await subRes.text()}`);
     const subs: { user_id: string; endpoint: string; p256dh: string; auth: string }[] = await subRes.json();
     const targets = subs.filter((s) => !offUserIds.has(s.user_id));
 
