@@ -9,3 +9,6 @@ Thumbs.db
 
 # Claude Codeのローカル設定(このPC固有のツール設定。アプリの動作には無関係)
 .claude/
+
+# Supabase CLIのローカルキャッシュ(このPC固有の情報。アプリの動作には無関係)
+supabase/.temp/
