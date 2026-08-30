@@ -739,13 +739,15 @@
             </template>
           </select>
           <!-- CSV一括取り込みなど、対戦相手がまだ登録されていない日程はその場で追加できるようにする -->
-          <div x-show="statsEvent && !statsEvent.opponents.length" class="mt-1">
+          <!-- 対戦相手の新規登録は日程管理と同じく管理者のみ(スタッツ管理者は既存の試合の記録・修正を担当) -->
+          <div x-show="isAdmin && statsEvent && !statsEvent.opponents.length" class="mt-1">
             <p class="text-[11px] text-slate-400 mb-1.5">この日程には対戦相手がまだ登録されていません。対戦相手を追加するとスタッツを記録できます。</p>
             <div class="flex items-center gap-2">
               <input type="text" x-model="newStatsOpponentInput" placeholder="対戦相手名" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-xs" @keydown.enter.prevent="addOpponentForStatsEvent()">
               <button @click="addOpponentForStatsEvent()" class="tap-btn bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">追加</button>
             </div>
           </div>
+          <p x-show="!isAdmin && statsEvent && !statsEvent.opponents.length" class="text-[11px] text-slate-400 mt-1">この日程には対戦相手がまだ登録されていません。管理者に登録を依頼してください。</p>
         </div>
       </div>
 
@@ -1066,7 +1068,7 @@
       <!-- 役割・権限の設定 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <h3 class="font-bold text-sm mb-1">🔑 役割・権限の設定</h3>
-        <p class="text-xs text-slate-400 mb-3">管理者以外にも、配車の組み立て・会費管理・動画/ライブ配信の管理を任せられます。</p>
+        <p class="text-xs text-slate-400 mb-3">管理者以外にも、配車の組み立て・会費管理・動画/ライブ配信・スタッツの管理を任せられます。</p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -1075,6 +1077,7 @@
                 <td class="text-center pb-1">🚗 配車管理</td>
                 <td class="text-center pb-1">💰 会計担当</td>
                 <td class="text-center pb-1">🎥 配信管理</td>
+                <td class="text-center pb-1">📊 スタッツ管理</td>
               </tr>
             </thead>
             <tbody>
@@ -1089,9 +1092,13 @@
                     <input type="checkbox" :checked="m.role==='admin' || m.canManageFinance" :disabled="m.role==='admin'"
                       @change="toggleMemberFlag(m.id, 'canManageFinance', $event.target.checked)">
                   </td>
-                  <td class="rounded-r-lg text-center">
+                  <td class="text-center">
                     <input type="checkbox" :checked="m.role==='admin' || m.canManageLive" :disabled="m.role==='admin'"
                       @change="toggleMemberFlag(m.id, 'canManageLive', $event.target.checked)">
+                  </td>
+                  <td class="rounded-r-lg text-center">
+                    <input type="checkbox" :checked="m.role==='admin' || m.canManageStats" :disabled="m.role==='admin'"
+                      @change="toggleMemberFlag(m.id, 'canManageStats', $event.target.checked)">
                   </td>
                 </tr>
               </template>
@@ -1217,7 +1224,14 @@
         <p x-show="editingDay.place"><span class="font-semibold">会場:</span> <span x-text="editingDay.place"></span></p>
         <p x-show="editingDay.meetPlace || editingDay.meetTime"><span class="font-semibold">集合場所/時間:</span>
           <span x-text="editingDay.meetPlace"></span> <span x-text="editingDay.meetTime"></span></p>
-        <p x-show="editingDay.opponents && editingDay.opponents.length"><span class="font-semibold">対戦相手:</span> <span x-text="editingDay.opponents.map(o=>o.name).join('、')"></span></p>
+        <div x-show="editingDay.opponents && editingDay.opponents.length">
+          <span class="font-semibold">対戦相手:</span>
+          <template x-for="(o,oi) in editingDay.opponents" :key="oi">
+            <span>
+              <span x-text="o.name"></span><span x-show="opponentScoreLabel(o.gameId)" class="font-bold text-violet-800" x-text="'(' + opponentScoreLabel(o.gameId) + ')'"></span><span x-show="oi < editingDay.opponents.length - 1">、</span>
+            </span>
+          </template>
+        </div>
         <!-- 配車は対戦相手が未登録(組み合わせ抽選前など)でも調整できるため、練習・休み以外なら常に表示する -->
         <div x-show="['公式戦','カップ戦','練習試合'].includes(editingDay.dayType)" class="bg-slate-50 rounded-lg px-3 py-2 mt-2">
           <div class="flex items-center justify-between">
@@ -1293,6 +1307,7 @@
                 <template x-for="(o,oi) in editingDay.opponents" :key="oi">
                   <span class="bg-slate-100 text-xs rounded-full px-2 py-1 flex items-center gap-1">
                     <span x-text="o.name"></span>
+                    <span x-show="opponentScoreLabel(o.gameId)" class="font-bold text-violet-800" x-text="'(' + opponentScoreLabel(o.gameId) + ')'"></span>
                     <button @click="editingDay.opponents.splice(oi,1)" class="tap-btn text-slate-400 hover:text-red-500">×</button>
                   </span>
                 </template>
@@ -1483,7 +1498,7 @@ function app() {
       { id:'schedule', label:'スケジュール', icon:'🗓️', visible:'all' },
       { id:'carpool',  label:'配車',       icon:'🚗', visible:'all' },
       { id:'results',  label:'結果',       icon:'🏆', visible:'all' },
-      { id:'stats',    label:'スタッツ',    icon:'📊', visible:'all' },
+      { id:'stats',    label:'スタッツ',    icon:'📊', visible:'stats' },
       { id:'finance',  label:'会費',       icon:'💰', visible:'finance' },
       { id:'admin',    label:'管理',       icon:'⚙️', visible:'admin' },
     ],
@@ -1590,7 +1605,7 @@ function app() {
           .map(p => ({ id: p.id, name: p.name, relation: '選手', number: p.number || '' }));
         return {
           id: u.id, name: u.name, email: u.email, role: u.role, status: u.status,
-          canManageCarpool: u.can_manage_carpool, canManageFinance: u.can_manage_finance, canManageLive: u.can_manage_live,
+          canManageCarpool: u.can_manage_carpool, canManageFinance: u.can_manage_finance, canManageLive: u.can_manage_live, canManageStats: u.can_manage_stats,
           familyId: u.family_id,
           familyMembers: [...ownFamilyMembers, ...ownPlayers],
         };
@@ -1603,7 +1618,7 @@ function app() {
       if (m.status === 'suspended') { this.currentUser = null; await sb.auth.signOut(); return 'suspended'; }
       this.currentUser = {
         id: m.id, name: m.name, email: m.email, role: m.role,
-        canManageCarpool: m.canManageCarpool, canManageFinance: m.canManageFinance, canManageLive: m.canManageLive,
+        canManageCarpool: m.canManageCarpool, canManageFinance: m.canManageFinance, canManageLive: m.canManageLive, canManageStats: m.canManageStats,
       };
       await this.fetchScheduleDaysFromSupabase();
       await this.fetchGamesFromSupabase();
@@ -1935,10 +1950,12 @@ function app() {
     // ================= 認証 =================
     get isAdmin() { return this.currentUser && this.currentUser.role === 'admin'; },
     get isFinanceManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageFinance)); },
+    get isStatsManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageStats)); },
     get visibleTabs() {
       return this.tabs.filter(t => {
         if (t.visible === 'admin') return this.isAdmin;
         if (t.visible === 'finance') return this.isFinanceManager;
+        if (t.visible === 'stats') return this.isStatsManager;
         return true;
       });
     },
@@ -2547,7 +2564,7 @@ function app() {
     async toggleMemberFlag(id, flag, checked) {
       const m = this.members.find(m => m.id === id);
       if (!m) return;
-      const columnMap = { canManageCarpool: 'can_manage_carpool', canManageFinance: 'can_manage_finance', canManageLive: 'can_manage_live' };
+      const columnMap = { canManageCarpool: 'can_manage_carpool', canManageFinance: 'can_manage_finance', canManageLive: 'can_manage_live', canManageStats: 'can_manage_stats' };
       const column = columnMap[flag];
       if (!column) return;
       const { error } = await sb.from('users').update({ [column]: checked }).eq('id', id);
@@ -2670,6 +2687,15 @@ function app() {
     // ================= 試合結果 =================
     teamScore(g) { return g.quarters.reduce((s,q)=>s+q.home, 0); },
     oppScore(g) { return g.quarters.reduce((s,q)=>s+q.away, 0); },
+    // スケジュール(日程編集画面)の対戦相手の横に、スタッツの結果を表示するためのラベル。
+    // 試合がまだ始まっていなければ空文字(何も表示しない)。
+    opponentScoreLabel(gameId) {
+      const g = this.games.find(x => String(x.id) === String(gameId));
+      if (!g) return '';
+      const home = this.teamScore(g), away = this.oppScore(g);
+      if (!g.finished && home === 0 && away === 0) return '';
+      return (g.finished ? '' : '途中 ') + home + '-' + away;
+    },
 
     // ---- ライブ配信(YouTube Liveは埋め込み再生、それ以外はリンクで開く) ----
     get liveGames() { return this.games.filter(g => g.isLive && g.liveUrl); },
