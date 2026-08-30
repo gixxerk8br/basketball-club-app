@@ -632,119 +632,87 @@
         <button x-show="isAdmin" @click="openGameModal()" class="tap-btn bg-violet-700 text-white text-sm font-semibold px-3 py-2 rounded-lg">+ 試合を追加</button>
       </div>
 
-      <!-- 動画・ライブ配信メニュー(Band風にまとめて一覧・すぐ視聴) -->
-      <div id="video-menu" class="bg-white rounded-2xl shadow-sm p-4">
-        <h3 class="font-bold text-sm mb-1">🎥 動画・ライブ配信</h3>
-        <p class="text-[11px] text-slate-400 mb-3">配信の開始・終了は「配信管理」権限を持つ方が操作できます。会場にいる配信担当の方がスマホでライブ配信を始めてください。</p>
+      <div class="space-y-5">
+        <template x-for="grp in gamesByTournament" :key="grp.label">
+          <div>
+            <div class="flex items-center justify-between px-1 mb-2">
+              <h3 class="font-bold text-sm text-slate-600" x-text="grp.label"></h3>
+              <span class="text-[11px] text-slate-400" x-text="grp.wins+'勝'+grp.losses+'敗'+(grp.draws?' '+grp.draws+'分':'')"></span>
+            </div>
+            <div class="space-y-3">
+              <template x-for="g in grp.games" :key="g.id">
+                <div class="bg-white rounded-2xl shadow-sm p-4" :id="'game_'+g.id">
+                  <div class="flex items-start justify-between">
+                    <div>
+                      <p class="text-xs text-slate-400" x-text="g.date + '  📍' + g.place"></p>
+                      <p class="font-bold mt-1">自チーム <span class="text-violet-800" x-text="teamScore(g)"></span>
+                        - <span class="text-slate-500" x-text="oppScore(g)"></span> <span x-text="g.opponent"></span></p>
+                    </div>
+                    <div class="flex flex-col items-end gap-1">
+                      <div class="flex gap-2" x-show="isAdmin">
+                        <button @click="openGameModal(g)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
+                        <button @click="deleteGame(g.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
+                      </div>
+                      <!-- ライブ配信の開始/終了は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
+                      <button x-show="isLiveManager && g.liveUrl" @click="toggleGameLive(g.id)" class="tap-btn text-[11px] font-bold px-2 py-1 rounded-lg whitespace-nowrap"
+                        :class="g.isLive ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'"
+                        x-text="g.isLive ? '🔴 配信終了にする' : '配信を開始する'"></button>
+                    </div>
+                  </div>
 
-        <div class="space-y-2">
-          <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="'media_'+g.id">
-            <div class="bg-slate-50 rounded-lg px-3 py-2.5">
-              <div class="flex items-center justify-between gap-2">
-                <div>
-                  <p class="text-sm font-semibold flex items-center gap-1.5">
-                    <span x-show="g.isLive && g.liveUrl" class="text-red-500 text-[10px] font-bold">🔴 LIVE</span>
-                    <span x-text="'vs ' + g.opponent"></span>
-                  </p>
-                  <p class="text-xs text-slate-400" x-text="g.date"></p>
-                </div>
-                <div class="flex flex-col items-end gap-1">
-                  <button x-show="isLiveManager && g.isLive && g.liveUrl" @click="toggleGameLive(g.id)" type="button"
-                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-red-500 text-white whitespace-nowrap">⏹ 配信を終了</button>
-                  <button x-show="isLiveManager && !g.isLive && g.liveUrl" @click="toggleGameLive(g.id)" type="button"
-                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white whitespace-nowrap">🔴 配信を開始</button>
-                  <button x-show="isLiveManager && !g.liveUrl" @click="openLiveSetupModal(g.id)" type="button"
-                    class="tap-btn text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white whitespace-nowrap">🔴 配信URLを設定</button>
-                  <!-- 配信URLの投稿・編集・削除は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
-                  <div class="flex gap-1" x-show="isLiveManager && g.liveUrl">
-                    <button @click="openLiveSetupModal(g.id)" type="button" class="tap-btn text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">✏️ URL編集</button>
-                    <button @click="clearLiveUrl(g.id)" type="button" class="tap-btn text-[11px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500">🗑 削除</button>
+                  <!-- ライブ配信 -->
+                  <div x-show="g.isLive && g.liveUrl" class="mt-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                      </span>
+                      <span class="text-xs font-bold text-red-500">LIVE配信中</span>
+                    </div>
+                    <template x-if="isYouTubeUrl(g.liveUrl)">
+                      <div class="aspect-video rounded-lg overflow-hidden bg-black">
+                        <iframe :src="youtubeEmbedUrl(g.liveUrl)" class="w-full h-full" frameborder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                      </div>
+                    </template>
+                    <template x-if="!isYouTubeUrl(g.liveUrl)">
+                      <a :href="g.liveUrl" target="_blank" class="tap-btn block text-center bg-red-500 text-white text-sm font-bold py-2.5 rounded-lg">🔴 ライブ配信を見る(外部アプリで開きます)</a>
+                    </template>
+                  </div>
+
+                  <!-- クォーター別(電光掲示板風) -->
+                  <div class="overflow-x-auto mt-3 bg-slate-900 rounded-xl p-3">
+                    <table class="text-xs w-full text-center border-collapse text-white">
+                      <thead>
+                        <tr class="text-slate-500 border-b border-slate-700">
+                          <td class="text-left py-1"></td>
+                          <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1" x-text="'Q'+(i+1)"></td></template>
+                          <td class="font-bold py-1">計</td>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="text-left py-1.5 font-semibold">自チーム</td>
+                          <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums" x-text="q.home"></td></template>
+                          <td class="font-black py-1.5 tabular-nums" x-text="teamScore(g)"></td>
+                        </tr>
+                        <tr class="border-t border-slate-800">
+                          <td class="text-left py-1.5 font-semibold text-red-300" x-text="g.opponent"></td>
+                          <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums text-slate-300" x-text="q.away"></td></template>
+                          <td class="font-black py-1.5 tabular-nums text-red-300" x-text="oppScore(g)"></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div class="flex gap-2 mt-3">
+                    <a :href="g.videoUrl||'#'" target="_blank" x-show="g.videoUrl"
+                      class="tap-btn flex-1 text-center bg-slate-800 text-white text-xs font-semibold py-2 rounded-lg">▶ 動画を見る</a>
+                    <a :href="g.photoUrl||'#'" target="_blank" x-show="g.photoUrl"
+                      class="tap-btn flex-1 text-center bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-lg">🖼 写真ギャラリー</a>
                   </div>
                 </div>
-              </div>
-              <div class="flex gap-2 mt-2" x-show="(g.isLive && g.liveUrl) || g.videoUrl || g.photoUrl">
-                <button x-show="g.isLive && g.liveUrl" @click="jumpToGameMedia(g.id)" type="button"
-                  class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">見る</button>
-                <a x-show="g.videoUrl" :href="g.videoUrl" target="_blank" class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">▶ 動画</a>
-                <a x-show="g.photoUrl" :href="g.photoUrl" target="_blank" class="tap-btn flex-1 text-center bg-white border border-slate-200 text-xs font-semibold py-1.5 rounded-lg">🖼 写真</a>
-              </div>
-            </div>
-          </template>
-          <p x-show="games.length===0" class="text-sm text-slate-400 text-center py-4">試合がまだ登録されていません。</p>
-        </div>
-      </div>
-
-      <div class="space-y-3">
-        <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="g.id">
-          <div class="bg-white rounded-2xl shadow-sm p-4" :id="'game_'+g.id">
-            <div class="flex items-start justify-between">
-              <div>
-                <p class="text-xs text-slate-400" x-text="g.date + '  📍' + g.place + (g.roundLabel ? '  ・' + g.roundLabel : '')"></p>
-                <p class="font-bold mt-1">自チーム <span class="text-violet-800" x-text="teamScore(g)"></span>
-                  - <span class="text-slate-500" x-text="oppScore(g)"></span> <span x-text="g.opponent"></span></p>
-              </div>
-              <div class="flex flex-col items-end gap-1">
-                <div class="flex gap-2" x-show="isAdmin">
-                  <button @click="openGameModal(g)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
-                  <button @click="deleteGame(g.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
-                </div>
-                <!-- ライブ配信の開始/終了は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
-                <button x-show="isLiveManager && g.liveUrl" @click="toggleGameLive(g.id)" class="tap-btn text-[11px] font-bold px-2 py-1 rounded-lg whitespace-nowrap"
-                  :class="g.isLive ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'"
-                  x-text="g.isLive ? '🔴 配信終了にする' : '配信を開始する'"></button>
-              </div>
-            </div>
-
-            <!-- ライブ配信 -->
-            <div x-show="g.isLive && g.liveUrl" class="mt-3">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="relative flex h-2.5 w-2.5">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                </span>
-                <span class="text-xs font-bold text-red-500">LIVE配信中</span>
-              </div>
-              <template x-if="isYouTubeUrl(g.liveUrl)">
-                <div class="aspect-video rounded-lg overflow-hidden bg-black">
-                  <iframe :src="youtubeEmbedUrl(g.liveUrl)" class="w-full h-full" frameborder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                </div>
               </template>
-              <template x-if="!isYouTubeUrl(g.liveUrl)">
-                <a :href="g.liveUrl" target="_blank" class="tap-btn block text-center bg-red-500 text-white text-sm font-bold py-2.5 rounded-lg">🔴 ライブ配信を見る(外部アプリで開きます)</a>
-              </template>
-            </div>
-
-            <!-- クォーター別(電光掲示板風) -->
-            <div class="overflow-x-auto mt-3 bg-slate-900 rounded-xl p-3">
-              <table class="text-xs w-full text-center border-collapse text-white">
-                <thead>
-                  <tr class="text-slate-500 border-b border-slate-700">
-                    <td class="text-left py-1"></td>
-                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1" x-text="'Q'+(i+1)"></td></template>
-                    <td class="font-bold py-1">計</td>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="text-left py-1.5 font-semibold">自チーム</td>
-                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums" x-text="q.home"></td></template>
-                    <td class="font-black py-1.5 tabular-nums" x-text="teamScore(g)"></td>
-                  </tr>
-                  <tr class="border-t border-slate-800">
-                    <td class="text-left py-1.5 font-semibold text-red-300" x-text="g.opponent"></td>
-                    <template x-for="(q,i) in g.quarters" :key="i"><td class="py-1.5 tabular-nums text-slate-300" x-text="q.away"></td></template>
-                    <td class="font-black py-1.5 tabular-nums text-red-300" x-text="oppScore(g)"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="flex gap-2 mt-3">
-              <a :href="g.videoUrl||'#'" target="_blank" x-show="g.videoUrl"
-                class="tap-btn flex-1 text-center bg-slate-800 text-white text-xs font-semibold py-2 rounded-lg">▶ 動画を見る</a>
-              <a :href="g.photoUrl||'#'" target="_blank" x-show="g.photoUrl"
-                class="tap-btn flex-1 text-center bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-lg">🖼 写真ギャラリー</a>
             </div>
           </div>
         </template>
@@ -3019,6 +2987,25 @@ function app() {
     // ================= 試合結果 =================
     teamScore(g) { return g.quarters.reduce((s,q)=>s+q.home, 0); },
     oppScore(g) { return g.quarters.reduce((s,q)=>s+q.away, 0); },
+    // 試合結果を大会(roundLabel = 日程の「予定」または種別名。同じ日に複数対戦相手がいても
+    // linkGamesForDay()で全員同じroundLabelが付くため、これでまとめられる)ごとにグループ化する。
+    // グループは「その大会で一番新しい試合の日付」が新しい順に並び、各グループ内は試合日の新しい順。
+    get gamesByTournament() {
+      const groups = {};
+      const order = [];
+      this.games.forEach(g => {
+        const key = g.roundLabel || g.category || 'その他';
+        if (!groups[key]) { groups[key] = []; order.push(key); }
+        groups[key].push(g);
+      });
+      return order.map(label => {
+        const list = groups[label].slice().sort((a,b) => b.date.localeCompare(a.date));
+        const wins = list.filter(g => g.finished && this.teamScore(g) > this.oppScore(g)).length;
+        const losses = list.filter(g => g.finished && this.teamScore(g) < this.oppScore(g)).length;
+        const draws = list.filter(g => g.finished && this.teamScore(g) === this.oppScore(g)).length;
+        return { label, games: list, latestDate: list[0].date, wins, losses, draws };
+      }).sort((a,b) => b.latestDate.localeCompare(a.latestDate));
+    },
     // スケジュール(日程編集画面)の対戦相手の横に、スタッツの結果を表示するためのラベル。
     // 試合がまだ始まっていなければ空文字(何も表示しない)。
     opponentScoreLabel(gameId) {
@@ -3031,25 +3018,6 @@ function app() {
 
     // ---- ライブ配信(YouTube Liveは埋め込み再生、それ以外はリンクで開く) ----
     get liveGames() { return this.games.filter(g => g.isLive && g.liveUrl); },
-    // ライブ・動画・写真のいずれかがある試合を新しい順にまとめた一覧(Band風の動画メニュー用)
-    get mediaGames() {
-      return this.games
-        .filter(g => g.liveUrl || g.videoUrl || g.photoUrl)
-        .sort((a,b) => b.date.localeCompare(a.date));
-    },
-    jumpToGameMedia(gameId) {
-      this.$nextTick(() => {
-        const el = document.getElementById('game_' + gameId);
-        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
-      });
-    },
-    goToVideoMenu() {
-      this.activeTab = 'results';
-      this.$nextTick(() => {
-        const el = document.getElementById('video-menu');
-        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
-      });
-    },
     // ---- Bandへのショートカット(承認済みメンバーなら誰でも使える。管理者がURLを設定) ----
     // band_url: 「Bandを見る」用(グループのトップページ)。band_live_url: 「Bandで配信する」用(ライブ配信作成画面へ直接ジャンプ)
     async updateBandUrl() {
