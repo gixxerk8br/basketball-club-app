@@ -250,7 +250,7 @@
 
       <div class="flex items-center gap-2 shrink-0">
         <!-- 個人設定(通知など)。管理者専用の⚙️管理画面とは別に、全メンバーが使える -->
-        <button @click="showSettingsModal=true" class="tap-btn text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0">🔔</button>
+        <button @click="showSettingsModal=true" class="tap-btn text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0">👤</button>
         <!-- スマホ用: 管理画面はボトムナビに入りきらないため、ここにも入口を用意 -->
         <button x-show="isAdmin" @click="activeTab='admin'" class="tap-btn md:hidden text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0"
           :class="activeTab==='admin' ? 'bg-violet-100' : ''">⚙️</button>
@@ -1484,11 +1484,70 @@
 <div x-show="showSettingsModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
   <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
     <div class="flex items-center justify-between">
-      <h3 class="font-bold">🔔 個人設定・通知</h3>
+      <h3 class="font-bold">👤 個人設定</h3>
       <button @click="showSettingsModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
     </div>
 
-    <div>
+    <p class="text-xs text-slate-400">ログイン中のメールアドレス: <span class="font-semibold text-slate-600" x-text="currentUser?.email"></span></p>
+
+    <div class="pt-2 border-t border-slate-100">
+      <h4 class="font-bold text-sm mb-1">パスワード変更</h4>
+      <div class="space-y-2">
+        <input type="password" x-model="changePasswordNew" placeholder="新しいパスワード(6文字以上)" autocomplete="new-password"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <input type="password" x-model="changePasswordConfirm" placeholder="新しいパスワード(確認)" autocomplete="new-password"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <p x-show="changePasswordMessage" x-text="changePasswordMessage" class="text-xs text-slate-600"></p>
+        <button @click="changeMyPassword()" type="button" class="tap-btn w-full bg-slate-800 text-white text-sm font-semibold py-2 rounded-lg">パスワードを変更する</button>
+      </div>
+    </div>
+
+    <div class="pt-2 border-t border-slate-100">
+      <h4 class="font-bold text-sm mb-1">ご家族情報</h4>
+      <p class="text-[11px] text-slate-400 mb-2">選手情報の変更・削除は、試合記録との整合性を保つため管理者にご連絡ください(追加のみここから可能です)。</p>
+      <div class="space-y-1.5 mb-2">
+        <template x-for="fm in myFamilyMembers" :key="fm.id">
+          <div class="flex gap-1.5 items-center bg-slate-50 rounded-lg px-2 py-1.5">
+            <template x-if="fm.relation === '選手'">
+              <span class="flex-1 text-sm text-slate-600" x-text="fm.name + '(選手' + (fm.number ? ' #' + fm.number : '') + ')'"></span>
+            </template>
+            <template x-if="fm.relation !== '選手'">
+              <div class="flex-1 flex gap-1.5">
+                <select x-model="fm.relation" @change="updateMyFamilyMember(fm)" class="border border-slate-300 rounded-lg px-1.5 py-1 text-xs">
+                  <option value="父">父</option>
+                  <option value="母">母</option>
+                  <option value="その他保護者">その他保護者</option>
+                  <option value="兄">兄</option>
+                  <option value="姉">姉</option>
+                  <option value="弟">弟</option>
+                  <option value="妹">妹</option>
+                </select>
+                <input type="text" x-model="fm.name" @change="updateMyFamilyMember(fm)" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-1 text-xs">
+              </div>
+            </template>
+            <button x-show="fm.relation !== '選手'" @click="removeMyFamilyMember(fm)" class="tap-btn text-slate-400 hover:text-red-500 text-sm px-1">×</button>
+          </div>
+        </template>
+      </div>
+      <div class="flex gap-1.5 items-center">
+        <select x-model="newFamilyMemberRelation" class="border border-slate-300 rounded-lg px-1.5 py-2 text-xs">
+          <option value="選手">選手</option>
+          <option value="父">父</option>
+          <option value="母">母</option>
+          <option value="その他保護者">その他保護者</option>
+          <option value="兄">兄</option>
+          <option value="姉">姉</option>
+          <option value="弟">弟</option>
+          <option value="妹">妹</option>
+        </select>
+        <input type="text" x-model="newFamilyMemberName" placeholder="氏名" class="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+        <input x-show="newFamilyMemberRelation==='選手'" type="text" x-model="newFamilyMemberNumber" placeholder="背番号" class="w-16 border border-slate-300 rounded-lg px-2 py-2 text-xs">
+        <button @click="addMyFamilyMember()" type="button" class="tap-btn bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-lg">追加</button>
+      </div>
+      <p x-show="familyEditMessage" x-text="familyEditMessage" class="text-xs text-emerald-600 mt-1"></p>
+    </div>
+
+    <div class="pt-2 border-t border-slate-100">
       <h4 class="font-bold text-sm mb-1">通知設定</h4>
       <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
 
@@ -1654,6 +1713,8 @@ function app() {
     statsEventKey: '', liveGameId: '', currentQuarter: 0, selectedPlayerId: null, statMessage: '', newStatsOpponentInput: '',
     showAnnouncementModal:false, editingAnnouncement:{},
     showBylawsModal:false, showSettingsModal:false,
+    changePasswordNew:'', changePasswordConfirm:'', changePasswordMessage:'',
+    newFamilyMemberRelation:'選手', newFamilyMemberName:'', newFamilyMemberNumber:'', familyEditMessage:'',
     bylawsArticles: [
       { num:'第1条', title:'名称', body:'本会は、「志免南ワイルドキャッツ」と称する。' },
       { num:'第2条', title:'会員', body:'本会の目的に賛同する者をもって構成する。' },
@@ -2166,6 +2227,64 @@ function app() {
       this.authView = 'login';
       this.loginError = '';
       alert('パスワードを更新しました。新しいパスワードでログインしてください。');
+    },
+    // ログイン中に、個人設定からパスワードを変更する(こちらはサインアウトしない)
+    async changeMyPassword() {
+      this.changePasswordMessage = '';
+      if (!this.changePasswordNew || this.changePasswordNew.length < 6) { this.changePasswordMessage = 'パスワードは6文字以上で入力してください。'; return; }
+      if (this.changePasswordNew !== this.changePasswordConfirm) { this.changePasswordMessage = '確認用パスワードが一致しません。'; return; }
+      const { error } = await sb.auth.updateUser({ password: this.changePasswordNew });
+      if (error) { this.changePasswordMessage = '更新に失敗しました。時間をおいて再度お試しください。'; console.error(error); return; }
+      this.changePasswordNew = ''; this.changePasswordConfirm = '';
+      this.changePasswordMessage = 'パスワードを変更しました。';
+    },
+    // ================= ご家族情報の編集(個人設定から本人が操作) =================
+    // 選手(players)の編集・削除は試合記録との整合性のため管理者のみ(追加だけは可能)。
+    // 保護者・きょうだい等(family_members)は本人が追加・編集・削除できる。
+    get myFamilyMembers() {
+      if (!this.currentUser) return [];
+      const m = this.members.find(x => x.id === this.currentUser.id);
+      return (m && m.familyMembers) || [];
+    },
+    async addMyFamilyMember() {
+      this.familyEditMessage = '';
+      const name = (this.newFamilyMemberName || '').trim();
+      if (!name) return;
+      const relation = this.newFamilyMemberRelation;
+      const m = this.members.find(x => x.id === this.currentUser.id);
+      if (!m) return;
+      if (relation === '選手') {
+        const { data, error } = await sb.from('players').insert({
+          club_id: CLUB_ID, family_id: m.familyId, name,
+          number: this.newFamilyMemberNumber ? String(this.newFamilyMemberNumber) : null, status: 'active',
+        }).select().single();
+        if (error || !data) { this.familyEditMessage = '追加に失敗しました。'; console.error(error); return; }
+        m.familyMembers.push({ id: data.id, name: data.name, relation: '選手', number: data.number || '' });
+        this.players.push({ id: data.id, number: data.number || '', name: data.name, status: 'active' });
+      } else {
+        const { data, error } = await sb.from('family_members').insert({
+          family_id: m.familyId, kind: this.familyMemberCategory(relation), name, relation,
+        }).select().single();
+        if (error || !data) { this.familyEditMessage = '追加に失敗しました。'; console.error(error); return; }
+        m.familyMembers.push({ id: data.id, name: data.name, relation });
+      }
+      this.newFamilyMemberName = ''; this.newFamilyMemberNumber = '';
+      this.familyEditMessage = '追加しました。';
+    },
+    // family_members(選手以外)の名前・続柄をその場で更新する
+    async updateMyFamilyMember(fm) {
+      const { error } = await sb.from('family_members')
+        .update({ name: fm.name, relation: fm.relation, kind: this.familyMemberCategory(fm.relation) })
+        .eq('id', fm.id);
+      if (error) { alert('保存に失敗しました。'); console.error(error); }
+    },
+    async removeMyFamilyMember(fm) {
+      if (fm.relation === '選手') return; // 選手は管理者のみ削除可(このボタン自体を表示しない)
+      if (!confirm(fm.name + 'さんを削除しますか?')) return;
+      const { error } = await sb.from('family_members').delete().eq('id', fm.id);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
+      const m = this.members.find(x => x.id === this.currentUser.id);
+      if (m) m.familyMembers = m.familyMembers.filter(x => x.id !== fm.id);
     },
     // 家族の入力行を「保護者/選手/家族同乗者(クラブ非所属)」の3種類に分類する
     familyMemberCategory(relation) {
