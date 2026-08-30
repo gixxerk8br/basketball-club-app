@@ -1488,9 +1488,40 @@
       <button @click="showSettingsModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
     </div>
 
-    <p class="text-xs text-slate-400">ログイン中のメールアドレス: <span class="font-semibold text-slate-600" x-text="currentUser?.email"></span></p>
+    <div>
+      <h4 class="font-bold text-sm mb-1">通知設定</h4>
+      <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
 
-    <div class="pt-2 border-t border-slate-100">
+      <button x-show="!pushSubscribed" @click="enablePushNotifications()" :disabled="notificationBusy" type="button"
+        class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition disabled:opacity-50">
+        この端末で通知を有効にする
+      </button>
+
+      <div x-show="pushSubscribed" class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm">📢 お知らせ</span>
+          <input type="checkbox" x-model="notificationPrefs.announcements" @change="updateNotificationPref('announcements')">
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm">🗓️ スケジュール</span>
+          <input type="checkbox" x-model="notificationPrefs.schedule" @change="updateNotificationPref('schedule')">
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm">🏆 試合結果</span>
+          <input type="checkbox" x-model="notificationPrefs.results" @change="updateNotificationPref('results')">
+        </div>
+        <button @click="disablePushNotifications()" :disabled="notificationBusy" type="button"
+          class="tap-btn w-full text-center text-xs text-slate-400 hover:text-red-500 underline mt-2">
+          この端末の通知を無効にする
+        </button>
+      </div>
+
+      <p x-show="notificationMessage" x-text="notificationMessage" class="text-xs text-slate-600 mt-2"></p>
+    </div>
+
+    <p class="text-xs text-slate-400 pt-2 border-t border-slate-100">ログイン中のメールアドレス: <span class="font-semibold text-slate-600" x-text="currentUser?.email"></span></p>
+
+    <div>
       <h4 class="font-bold text-sm mb-1">パスワード変更</h4>
       <div class="space-y-2">
         <input type="password" x-model="changePasswordNew" placeholder="新しいパスワード(6文字以上)" autocomplete="new-password"
@@ -1545,37 +1576,6 @@
         <button @click="addMyFamilyMember()" type="button" class="tap-btn bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-lg">追加</button>
       </div>
       <p x-show="familyEditMessage" x-text="familyEditMessage" class="text-xs text-emerald-600 mt-1"></p>
-    </div>
-
-    <div class="pt-2 border-t border-slate-100">
-      <h4 class="font-bold text-sm mb-1">通知設定</h4>
-      <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
-
-      <button x-show="!pushSubscribed" @click="enablePushNotifications()" :disabled="notificationBusy" type="button"
-        class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition disabled:opacity-50">
-        この端末で通知を有効にする
-      </button>
-
-      <div x-show="pushSubscribed" class="space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="text-sm">📢 お知らせ</span>
-          <input type="checkbox" x-model="notificationPrefs.announcements" @change="updateNotificationPref('announcements')">
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-sm">🗓️ スケジュール</span>
-          <input type="checkbox" x-model="notificationPrefs.schedule" @change="updateNotificationPref('schedule')">
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-sm">🏆 試合結果</span>
-          <input type="checkbox" x-model="notificationPrefs.results" @change="updateNotificationPref('results')">
-        </div>
-        <button @click="disablePushNotifications()" :disabled="notificationBusy" type="button"
-          class="tap-btn w-full text-center text-xs text-slate-400 hover:text-red-500 underline mt-2">
-          この端末の通知を無効にする
-        </button>
-      </div>
-
-      <p x-show="notificationMessage" x-text="notificationMessage" class="text-xs text-slate-600 mt-2"></p>
     </div>
 
     <div class="pt-2 border-t border-slate-100">
