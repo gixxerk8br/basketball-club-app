@@ -725,19 +725,27 @@
           <label class="text-xs font-medium text-slate-500">① 日程を選択</label>
           <select x-model="statsEventKey" @change="onStatsEventChange()" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
             <option value="">-- 日程を選択 --</option>
-            <template x-for="ev in gameAgendaEvents" :key="ev.date">
+            <template x-for="ev in carpoolAgendaEvents" :key="ev.date">
               <option :value="ev.date" x-text="ev.date + ' ' + ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs ' + ev.opponents.map(o=>o.name).join('・') : '')"></option>
             </template>
           </select>
         </div>
         <div x-show="statsEvent">
           <label class="text-xs font-medium text-slate-500">② 対戦相手を選択</label>
-          <select x-model="liveGameId" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
+          <select x-show="statsEvent && statsEvent.opponents.length" x-model="liveGameId" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm">
             <option value="">-- 対戦相手を選択 --</option>
             <template x-for="opp in (statsEvent ? statsEvent.opponents : [])" :key="opp.gameId">
               <option :value="opp.gameId" x-text="opp.name"></option>
             </template>
           </select>
+          <!-- CSV一括取り込みなど、対戦相手がまだ登録されていない日程はその場で追加できるようにする -->
+          <div x-show="statsEvent && !statsEvent.opponents.length" class="mt-1">
+            <p class="text-[11px] text-slate-400 mb-1.5">この日程には対戦相手がまだ登録されていません。対戦相手を追加するとスタッツを記録できます。</p>
+            <div class="flex items-center gap-2">
+              <input type="text" x-model="newStatsOpponentInput" placeholder="対戦相手名" class="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-xs" @keydown.enter.prevent="addOpponentForStatsEvent()">
+              <button @click="addOpponentForStatsEvent()" class="tap-btn bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">追加</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1492,7 +1500,7 @@ function app() {
     carpoolEventKey: '', myCarpoolDraft: { status:'', capacity:0, riders:[] }, carpoolSavedMessage:'',
     carpoolSelectedRiders:[], carpoolFullMessage:'', carpoolSpotRiderName:'',
     newPlayerNumber: '', newPlayerName: '',
-    statsEventKey: '', liveGameId: '', currentQuarter: 0, selectedPlayerId: null, statMessage: '',
+    statsEventKey: '', liveGameId: '', currentQuarter: 0, selectedPlayerId: null, statMessage: '', newStatsOpponentInput: '',
     showAnnouncementModal:false, editingAnnouncement:{},
     showBylawsModal:false,
     bylawsArticles: [
@@ -2865,6 +2873,20 @@ function app() {
       const ev = this.statsEvent;
       // 対戦相手が1つだけなら自動で選択する
       this.liveGameId = (ev && ev.opponents && ev.opponents.length === 1) ? ev.opponents[0].gameId : '';
+    },
+    // CSV一括取り込みなどで対戦相手が未登録の日程は、スタッツ画面からその場で対戦相手を追加できるようにする
+    // (日程編集画面まで戻らなくても、スタッツ記録をすぐ始められるようにするため)
+    async addOpponentForStatsEvent() {
+      const name = (this.newStatsOpponentInput || '').trim();
+      const ev = this.statsEvent;
+      if (!name || !ev) return;
+      if (!ev.opponents) ev.opponents = [];
+      ev.opponents.push({ name, gameId: null });
+      await this.linkGamesForDay(ev);
+      const { error } = await sb.from('schedule_days').update({ opponents: ev.opponents }).eq('date', ev.date);
+      if (error) { alert('対戦相手の保存に失敗しました。'); console.error(error); return; }
+      this.newStatsOpponentInput = '';
+      this.onStatsEventChange();
     },
     get liveGame() {
       return this.games.find(g => String(g.id) === String(this.liveGameId)) || null;
