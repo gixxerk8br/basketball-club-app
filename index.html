@@ -2768,7 +2768,7 @@ function app() {
     openBandBroadcast() {
       if (!this.clubSettings.bandLiveUrl) return;
       // 誤タップでの配信開始を防ぐため、Bandアプリを開く前に一段階確認する
-      if (!confirm('Bandで配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
+      if (!confirm('動画配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
       window.open(this.clubSettings.bandLiveUrl, '_blank');
     },
     extractYouTubeId(url) {
