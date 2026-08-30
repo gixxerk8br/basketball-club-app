@@ -584,6 +584,13 @@
       <div id="video-menu" class="bg-white rounded-2xl shadow-sm p-4">
         <h3 class="font-bold text-sm mb-1">🎥 動画・ライブ配信</h3>
         <p class="text-[11px] text-slate-400 mb-3">配信の開始・終了は「配信管理」権限を持つ方が操作できます。会場にいる配信担当の方がスマホでライブ配信を始めてください。</p>
+
+        <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える) -->
+        <div x-show="clubSettings.bandUrl" class="flex gap-2 mb-3">
+          <button @click="openBandBroadcast()" type="button" class="tap-btn flex-1 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg">📡 Bandで配信する</button>
+          <button @click="openBandWatch()" type="button" class="tap-btn flex-1 bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-lg">▶ Bandを見る</button>
+        </div>
+
         <div class="space-y-2">
           <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="'media_'+g.id">
             <div class="bg-slate-50 rounded-lg px-3 py-2.5">
@@ -1107,6 +1114,15 @@
         </div>
       </div>
 
+      <!-- クラブ全体の設定 -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">⚙️ クラブ設定</h3>
+        <p class="text-xs text-slate-400 mb-3">結果画面の「Bandで配信する」「Bandを見る」ボタンで開くリンクを設定します。</p>
+        <label class="text-xs font-medium text-slate-500">BandグループのURL</label>
+        <input type="url" x-model="clubSettings.bandUrl" @change="updateBandUrl()" placeholder="https://www.band.us/band/XXXXXXX"
+          class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      </div>
+
       <!-- お知らせ管理 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
@@ -1542,6 +1558,7 @@ function app() {
     newOpponentInput:'',
     // 会計・帳簿(会計担当者専用)
     financeSettings: { monthlyFee: 3000 },
+    clubSettings: { bandUrl: '' },
     feePayments: [],
     feeYear: 2026, feeMonth: 7, // 0=1月 なので 7=8月
     financeEntries: [],
@@ -1622,11 +1639,19 @@ function app() {
       };
       await this.fetchScheduleDaysFromSupabase();
       await this.fetchGamesFromSupabase();
+      await this.fetchClubSettingsFromSupabase();
       // 会計担当者・管理者以外は会計タブ自体を開けないため、無駄なフェッチを避ける
       if (this.currentUser.role === 'admin' || this.currentUser.canManageFinance) {
         await this.fetchFinanceFromSupabase();
       }
       return 'ok';
+    },
+    // クラブ全体の設定(Band URL等)を取得する。承認済み会員なら誰でも読めるため、
+    // 会計と違って全員分フェッチする(Bandのボタンは全員に表示するため)。
+    async fetchClubSettingsFromSupabase() {
+      const { data, error } = await sb.from('club_settings').select('*').maybeSingle();
+      if (error) { console.error('クラブ設定の取得に失敗しました', error); return; }
+      this.clubSettings = { bandUrl: (data && data.band_url) || '' };
     },
     // 2026-08-28: スケジュール・出欠・配車をSupabaseから取得する(フェーズ3で予定・出欠、
     // フェーズ4で配車を追加)。今までどおりの scheduleDays[] の形に組み立てるため、
@@ -2717,6 +2742,21 @@ function app() {
         const el = document.getElementById('video-menu');
         if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
       });
+    },
+    // ---- Bandへのショートカット(承認済みメンバーなら誰でも使える。管理者がURLを設定) ----
+    async updateBandUrl() {
+      const { error } = await sb.from('club_settings').update({ band_url: this.clubSettings.bandUrl || null }).eq('club_id', CLUB_ID);
+      if (error) { alert('Band URLの保存に失敗しました。'); console.error(error); }
+    },
+    openBandWatch() {
+      if (!this.clubSettings.bandUrl) return;
+      window.open(this.clubSettings.bandUrl, '_blank');
+    },
+    openBandBroadcast() {
+      if (!this.clubSettings.bandUrl) return;
+      // 誤タップでの配信開始を防ぐため、Bandアプリを開く前に一段階確認する
+      if (!confirm('Bandで配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
+      window.open(this.clubSettings.bandUrl, '_blank');
     },
     extractYouTubeId(url) {
       if (!url) return null;
