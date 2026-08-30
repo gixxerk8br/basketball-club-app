@@ -296,17 +296,17 @@
 
       <!-- クイックアクセス: Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
       <div class="grid grid-cols-2 gap-3">
-        <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+        <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-[#00c73c] rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">📡</span>
-          <span class="text-sm font-bold text-slate-800">Bandで配信する</span>
+          <span class="text-sm font-bold text-white">Bandで配信する</span>
         </button>
-        <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+        <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn bg-[#00c73c] rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">▶</span>
-          <span class="text-sm font-bold text-slate-800">Bandを見る</span>
+          <span class="text-sm font-bold text-white">Bandを見る</span>
         </button>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div class="bg-yellow-100 rounded-2xl shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-bold text-slate-800 flex items-center gap-1">📢 お知らせ</h2>
         </div>
