@@ -2292,10 +2292,11 @@ function app() {
     // 配車は対戦相手が未定(組み合わせ抽選前など)でも出欠・配車の調整自体はできるべきなので、
     // gameAgendaEventsと違い、対戦相手(opponents)の有無は問わない(CSV一括取り込みした日程も含まれる)
     get carpoolAgendaEvents() {
+      const today = this.todayStr;
       return this.scheduleDays
-        .filter(d => d.dayType && d.dayType !== '練習' && d.dayType !== '休み')
+        .filter(d => d.date >= today && d.dayType && d.dayType !== '練習' && d.dayType !== '休み')
         .map(d => ({ date:d.date, dayType:d.dayType, eventName:d.eventName||'', meetPlace:d.meetPlace||'', meetTime:d.meetTime||'', place:d.place||'', opponents:d.opponents||[] }))
-        .sort((a,b)=>b.date.localeCompare(a.date));
+        .sort((a,b)=>a.date.localeCompare(b.date));
     },
     myEventAttendance(ev) {
       if (!this.currentUser) return 'undecided';
