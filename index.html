@@ -82,6 +82,30 @@
           class="tap-btn w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
           <span>🔵</span> Googleでログイン
         </button>
+
+        <button type="button" @click="authView='forgot'; forgotEmail=loginEmail; forgotMessage=''"
+          class="tap-btn w-full text-center text-xs text-slate-400 hover:text-violet-700 underline">
+          パスワードを忘れた場合
+        </button>
+      </form>
+
+      <!-- --- パスワードを忘れた場合フォーム --- -->
+      <form x-show="authView==='forgot'" @submit.prevent="sendPasswordReset()" class="space-y-3">
+        <p class="text-xs text-slate-500">登録済みのメールアドレスを入力してください。パスワード再設定用のリンクをメールでお送りします。</p>
+        <div>
+          <label class="text-xs font-medium text-slate-500">メールアドレス</label>
+          <input type="email" x-model="forgotEmail" required autocomplete="email"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+        </div>
+        <p x-show="forgotMessage" x-text="forgotMessage" class="text-xs text-slate-600"></p>
+        <button type="submit"
+          class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
+          再設定メールを送信
+        </button>
+        <button type="button" @click="authView='login'; forgotMessage=''"
+          class="tap-btn w-full text-center text-xs text-slate-400 hover:text-violet-700 underline">
+          ログイン画面に戻る
+        </button>
       </form>
 
       <!-- --- 新規登録フォーム --- -->
@@ -167,6 +191,32 @@
       </form>
     </div>
 
+  </div>
+</div>
+
+<!-- ============================================================
+     パスワード再設定モーダル(再設定メールのリンクから開いた場合に自動表示。
+     ログイン前・ログイン後どちらの状態でも開く可能性があるため、
+     currentUserの有無に関係なく独立して表示する)
+     ============================================================ -->
+<div x-show="showPasswordRecoveryModal" x-cloak class="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-6 space-y-3">
+    <h3 class="font-bold text-lg">🔑 新しいパスワードを設定</h3>
+    <div>
+      <label class="text-xs font-medium text-slate-500">新しいパスワード(6文字以上)</label>
+      <input type="password" x-model="recoveryPassword" autocomplete="new-password"
+        class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+    </div>
+    <div>
+      <label class="text-xs font-medium text-slate-500">新しいパスワード(確認)</label>
+      <input type="password" x-model="recoveryPasswordConfirm" autocomplete="new-password" @keydown.enter="submitPasswordRecovery()"
+        class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-600">
+    </div>
+    <p x-show="recoveryMessage" x-text="recoveryMessage" class="text-xs text-red-500"></p>
+    <button @click="submitPasswordRecovery()" type="button"
+      class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
+      パスワードを更新する
+    </button>
   </div>
 </div>
 
@@ -1502,6 +1552,17 @@ const SUPABASE_ANON_KEY = 'sb_publishable_3i1kjAOwVV0s256tz7dHEg_Lvz3u8hZ';
 const CLUB_ID = '00000000-0000-0000-0000-000000000001';
 // グローバル変数名 `supabase` はCDNの supabase-js 自体が使っているため、クライアントは別名(sb)で持つ。
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// パスワード再設定メールのリンクから開かれた場合、Supabase側が「PASSWORD_RECOVERY」イベントを発火する。
+// Alpineの初期化(init())より先にこのイベントが発火することがあるため、スクリプトの一番上で
+// リスナーを登録しておく(_appInstanceがまだ無ければフラグだけ立てて、initの中で拾う)。
+let _appInstance = null;
+let _passwordRecoveryPending = false;
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    if (_appInstance) { _appInstance.showPasswordRecoveryModal = true; }
+    else { _passwordRecoveryPending = true; }
+  }
+});
 
 // Chart.jsのインスタンスはAlpineのリアクティブ管理下に置かない(循環参照があるため)
 const _charts = {};
@@ -1512,6 +1573,8 @@ function app() {
     currentUser: null,
     authView: 'login',
     loginEmail: '', loginPassword: '', loginError: '',
+    forgotEmail: '', forgotMessage: '',
+    showPasswordRecoveryModal: false, recoveryPassword: '', recoveryPasswordConfirm: '', recoveryMessage: '',
     signupName: '', signupEmail: '', signupPassword: '', signupMessage: '',
     signupFamily: [{ relation:'選手', name:'', number:'' }],
 
@@ -1582,6 +1645,8 @@ function app() {
     // 試合結果・スタッツ・会費/会計は、すべてSupabaseが正になった(ログイン後にfetchXFromSupabase()で読み込む)。
     // localStorageに残るのはお知らせ(announcements)のみ。
     async init() {
+      _appInstance = this;
+      if (_passwordRecoveryPending) { this.showPasswordRecoveryModal = true; _passwordRecoveryPending = false; }
       const saved = localStorage.getItem('bbclub_prototype_data');
       if (saved) {
         Object.assign(this, JSON.parse(saved));
@@ -2013,6 +2078,35 @@ function app() {
     },
     googleLoginMock() {
       alert('デモ版のためGoogleログインは無効です。\n本番環境ではSupabase AuthのGoogle OAuth連携に置き換えます。');
+    },
+    // ================= パスワードを忘れた場合 =================
+    // 1. メールアドレスを入力→再設定メールを送信(sendPasswordReset)
+    // 2. メール内のリンクを開くと、Supabaseが自動的にPASSWORD_RECOVERYイベントを発火する
+    //    (index.html冒頭のonAuthStateChangeで検知し、showPasswordRecoveryModalをtrueにする)
+    // 3. 新しいパスワードを入力(submitPasswordRecovery)
+    async sendPasswordReset() {
+      this.forgotMessage = '';
+      const email = (this.forgotEmail || '').trim();
+      if (!email) { this.forgotMessage = 'メールアドレスを入力してください。'; return; }
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) { this.forgotMessage = '送信に失敗しました。時間をおいて再度お試しください。'; console.error(error); return; }
+      this.forgotMessage = 'パスワード再設定用のメールを送信しました。メール内のリンクを開いて新しいパスワードを設定してください。';
+    },
+    async submitPasswordRecovery() {
+      this.recoveryMessage = '';
+      if (!this.recoveryPassword || this.recoveryPassword.length < 6) { this.recoveryMessage = 'パスワードは6文字以上で入力してください。'; return; }
+      if (this.recoveryPassword !== this.recoveryPasswordConfirm) { this.recoveryMessage = '確認用パスワードが一致しません。'; return; }
+      const { error } = await sb.auth.updateUser({ password: this.recoveryPassword });
+      if (error) { this.recoveryMessage = '更新に失敗しました。時間をおいて再度お試しください。'; console.error(error); return; }
+      // 新しいパスワードでの通常ログインへ導線をそろえるため、いったんサインアウトする
+      await sb.auth.signOut();
+      this.showPasswordRecoveryModal = false;
+      this.recoveryPassword = ''; this.recoveryPasswordConfirm = ''; this.recoveryMessage = '';
+      this.authView = 'login';
+      this.loginError = '';
+      alert('パスワードを更新しました。新しいパスワードでログインしてください。');
     },
     // 家族の入力行を「保護者/選手/家族同乗者(クラブ非所属)」の3種類に分類する
     familyMemberCategory(relation) {
