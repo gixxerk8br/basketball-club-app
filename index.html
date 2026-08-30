@@ -292,12 +292,8 @@
         </button>
       </template>
 
-      <!-- クイックアクセス -->
+      <!-- クイックアクセス: 上段にBand関連をまとめ、クラブ規約は右下に配置(カテゴリでわかりやすく) -->
       <div class="grid grid-cols-2 gap-3">
-        <button @click="showBylawsModal=true" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
-          <span class="text-2xl">📜</span>
-          <span class="text-sm font-bold text-slate-800">クラブ規約</span>
-        </button>
         <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
         <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">📡</span>
@@ -306,6 +302,10 @@
         <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">▶</span>
           <span class="text-sm font-bold text-slate-800">Bandを見る</span>
+        </button>
+        <button @click="showBylawsModal=true" type="button" class="tap-btn col-start-2 bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+          <span class="text-2xl">📜</span>
+          <span class="text-sm font-bold text-slate-800">クラブ規約</span>
         </button>
       </div>
 
