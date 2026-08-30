@@ -1713,11 +1713,21 @@ function app() {
       await this.fetchScheduleDaysFromSupabase();
       await this.fetchGamesFromSupabase();
       await this.fetchClubSettingsFromSupabase();
+      await this.fetchAnnouncementsFromSupabase();
       // 会計担当者・管理者以外は会計タブ自体を開けないため、無駄なフェッチを避ける
       if (this.currentUser.role === 'admin' || this.currentUser.canManageFinance) {
         await this.fetchFinanceFromSupabase();
       }
       return 'ok';
+    },
+    // お知らせを取得する。承認済み会員なら誰でも読める。
+    async fetchAnnouncementsFromSupabase() {
+      const { data, error } = await sb.from('announcements').select('*').order('date', { ascending: false });
+      if (error) { console.error('お知らせの取得に失敗しました', error); return; }
+      this.announcements = (data || []).map(a => ({
+        id: a.id, title: a.title, body: a.body || '', urgent: !!a.urgent,
+        date: a.date, category: a.category || '', linkUrl: a.link_url || '', linkLabel: a.link_label || '',
+      }));
     },
     // クラブ全体の設定(Band URL等)を取得する。承認済み会員なら誰でも読めるため、
     // 会計と違って全員分フェッチする(Bandのボタンは全員に表示するため)。
@@ -2031,13 +2041,9 @@ function app() {
       }).filter(Boolean);
     },
 
-    // 2026-08-28: members/players/currentUser・scheduleDays(予定・出欠・配車)・games(試合結果・スタッツ)・
-    // finance系(会費・帳簿)はすべてSupabaseが正になったため、ここでは保存しない。
-    // localStorageに残るのは announcements(お知らせ)のみ。
-    persist() {
-      const data = { announcements:this.announcements };
-      localStorage.setItem('bbclub_prototype_data', JSON.stringify(data));
-    },
+    // 2026-08-30: announcements(お知らせ)もSupabaseへ移行済み。これで全データがSupabaseとなり、
+    // localStorageに保存するものは無くなった(このメソッドは後方互換のため残してあるだけの空処理)。
+    persist() {},
     // 端末に保存されたデータを消去し、デモ用の初期データに戻す(スマホでも開発者ツール不要)
     resetAllData() {
       if (!confirm('この端末に保存されているすべてのデータを削除し、最初のデモ状態に戻します。よろしいですか?')) return;
@@ -2202,21 +2208,32 @@ function app() {
       this.editingAnnouncement = a ? { ...a } : { id:null, title:'', body:'', urgent:false, category:'', linkUrl:'', linkLabel:'' };
       this.showAnnouncementModal = true;
     },
-    saveAnnouncement() {
+    async saveAnnouncement() {
       if (!this.editingAnnouncement.title) return;
-      if (this.editingAnnouncement.id) {
-        const idx = this.announcements.findIndex(a => a.id === this.editingAnnouncement.id);
-        this.announcements[idx] = { ...this.editingAnnouncement };
+      const a = this.editingAnnouncement;
+      const payload = {
+        category: a.category || null, title: a.title, body: a.body || null,
+        link_url: a.linkUrl || null, link_label: a.linkLabel || null, urgent: !!a.urgent,
+      };
+      if (a.id) {
+        const { error } = await sb.from('announcements').update(payload).eq('id', a.id);
+        if (error) { alert('お知らせの保存に失敗しました。'); console.error(error); return; }
+        const idx = this.announcements.findIndex(x => x.id === a.id);
+        if (idx >= 0) this.announcements[idx] = { ...a };
       } else {
-        this.announcements.unshift({ ...this.editingAnnouncement, id: Date.now(), date: new Date().toISOString().slice(0,10) });
+        const id = crypto.randomUUID();
+        const date = new Date().toISOString().slice(0,10);
+        const { error } = await sb.from('announcements').insert({ id, ...payload, date });
+        if (error) { alert('お知らせの保存に失敗しました。'); console.error(error); return; }
+        this.announcements.unshift({ ...a, id, date });
       }
       this.showAnnouncementModal = false;
-      this.persist();
     },
-    deleteAnnouncement(id) {
+    async deleteAnnouncement(id) {
       if (!confirm('このお知らせを削除しますか?')) return;
+      const { error } = await sb.from('announcements').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
       this.announcements = this.announcements.filter(a => a.id !== id);
-      this.persist();
     },
 
     // ================= スケジュール(カレンダー・当番) =================
