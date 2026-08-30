@@ -249,7 +249,7 @@
           <span class="text-sm font-bold text-slate-800">クラブ規約</span>
         </button>
         <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
-        <button x-show="clubSettings.bandUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+        <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">📡</span>
           <span class="text-sm font-bold text-slate-800">Bandで配信する</span>
         </button>
@@ -1114,12 +1114,21 @@
       </div>
 
       <!-- クラブ全体の設定 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <h3 class="font-bold text-sm mb-1">⚙️ クラブ設定</h3>
-        <p class="text-xs text-slate-400 mb-3">結果画面の「Bandで配信する」「Bandを見る」ボタンで開くリンクを設定します。</p>
-        <label class="text-xs font-medium text-slate-500">BandグループのURL</label>
-        <input type="url" x-model="clubSettings.bandUrl" @change="updateBandUrl()" placeholder="https://www.band.us/band/XXXXXXX"
-          class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <div class="bg-white rounded-2xl shadow-sm p-5 space-y-3">
+        <div>
+          <h3 class="font-bold text-sm mb-1">⚙️ クラブ設定</h3>
+          <p class="text-xs text-slate-400">ホーム画面の「Bandで配信する」「Bandを見る」ボタンで開くリンクを設定します。</p>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500">BandグループのURL(「Bandを見る」用)</label>
+          <input type="url" x-model="clubSettings.bandUrl" @change="updateBandUrl()" placeholder="https://www.band.us/band/XXXXXXX/post"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500">Bandライブ配信作成URL(「Bandで配信する」用)</label>
+          <input type="url" x-model="clubSettings.bandLiveUrl" @change="updateBandLiveUrl()" placeholder="https://www.band.us/band/XXXXXXX/create-live"
+            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        </div>
       </div>
 
       <!-- お知らせ管理 -->
@@ -1557,7 +1566,7 @@ function app() {
     newOpponentInput:'',
     // 会計・帳簿(会計担当者専用)
     financeSettings: { monthlyFee: 3000 },
-    clubSettings: { bandUrl: '' },
+    clubSettings: { bandUrl: '', bandLiveUrl: '' },
     feePayments: [],
     feeYear: 2026, feeMonth: 7, // 0=1月 なので 7=8月
     financeEntries: [],
@@ -1650,7 +1659,7 @@ function app() {
     async fetchClubSettingsFromSupabase() {
       const { data, error } = await sb.from('club_settings').select('*').maybeSingle();
       if (error) { console.error('クラブ設定の取得に失敗しました', error); return; }
-      this.clubSettings = { bandUrl: (data && data.band_url) || '' };
+      this.clubSettings = { bandUrl: (data && data.band_url) || '', bandLiveUrl: (data && data.band_live_url) || '' };
     },
     // 2026-08-28: スケジュール・出欠・配車をSupabaseから取得する(フェーズ3で予定・出欠、
     // フェーズ4で配車を追加)。今までどおりの scheduleDays[] の形に組み立てるため、
@@ -2743,19 +2752,24 @@ function app() {
       });
     },
     // ---- Bandへのショートカット(承認済みメンバーなら誰でも使える。管理者がURLを設定) ----
+    // band_url: 「Bandを見る」用(グループのトップページ)。band_live_url: 「Bandで配信する」用(ライブ配信作成画面へ直接ジャンプ)
     async updateBandUrl() {
       const { error } = await sb.from('club_settings').update({ band_url: this.clubSettings.bandUrl || null }).eq('club_id', CLUB_ID);
       if (error) { alert('Band URLの保存に失敗しました。'); console.error(error); }
+    },
+    async updateBandLiveUrl() {
+      const { error } = await sb.from('club_settings').update({ band_live_url: this.clubSettings.bandLiveUrl || null }).eq('club_id', CLUB_ID);
+      if (error) { alert('Bandライブ配信URLの保存に失敗しました。'); console.error(error); }
     },
     openBandWatch() {
       if (!this.clubSettings.bandUrl) return;
       window.open(this.clubSettings.bandUrl, '_blank');
     },
     openBandBroadcast() {
-      if (!this.clubSettings.bandUrl) return;
+      if (!this.clubSettings.bandLiveUrl) return;
       // 誤タップでの配信開始を防ぐため、Bandアプリを開く前に一段階確認する
       if (!confirm('Bandで配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
-      window.open(this.clubSettings.bandUrl, '_blank');
+      window.open(this.clubSettings.bandLiveUrl, '_blank');
     },
     extractYouTubeId(url) {
       if (!url) return null;
