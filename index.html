@@ -309,6 +309,38 @@
         </button>
       </div>
 
+      <!-- 通知設定(端末ごと・項目ごとにオン/オフできる) -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="font-bold text-sm mb-1">🔔 通知設定</h3>
+        <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
+
+        <button x-show="!pushSubscribed" @click="enablePushNotifications()" :disabled="notificationBusy" type="button"
+          class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition disabled:opacity-50">
+          この端末で通知を有効にする
+        </button>
+
+        <div x-show="pushSubscribed" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm">📢 お知らせ</span>
+            <input type="checkbox" x-model="notificationPrefs.announcements" @change="updateNotificationPref('announcements')">
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm">🗓️ スケジュール</span>
+            <input type="checkbox" x-model="notificationPrefs.schedule" @change="updateNotificationPref('schedule')">
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm">🏆 試合結果</span>
+            <input type="checkbox" x-model="notificationPrefs.results" @change="updateNotificationPref('results')">
+          </div>
+          <button @click="disablePushNotifications()" :disabled="notificationBusy" type="button"
+            class="tap-btn w-full text-center text-xs text-slate-400 hover:text-red-500 underline mt-2">
+            この端末の通知を無効にする
+          </button>
+        </div>
+
+        <p x-show="notificationMessage" x-text="notificationMessage" class="text-xs text-slate-600 mt-2"></p>
+      </div>
+
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-bold text-slate-800 flex items-center gap-1">📢 お知らせ</h2>
@@ -1550,6 +1582,9 @@ const SUPABASE_URL = 'https://rjfbjlojnsbvcgpeccjq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_3i1kjAOwVV0s256tz7dHEg_Lvz3u8hZ';
 // フェーズ2では「クラブ」を1つだけ運用する。IDは supabase/phase2_schema.sql で挿入した固定値と一致させる。
 const CLUB_ID = '00000000-0000-0000-0000-000000000001';
+// プッシュ通知用のVAPID公開鍵(2026-08-30生成)。公開鍵はブラウザ側コードに含めて問題ない
+// 前提の鍵(秘密鍵とペアで、秘密鍵の方はSupabase Edge Functionsの環境変数にのみ保管する)。
+const VAPID_PUBLIC_KEY = 'BK7zkGqj16dqIlJs8VYOdmSmZcldZdk9eja9CKVZdK-S9BPTKEEBJv6C3ryLeSXua4107eNu7Y8Wq_iCYs7jKkY';
 // グローバル変数名 `supabase` はCDNの supabase-js 自体が使っているため、クライアントは別名(sb)で持つ。
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // パスワード再設定メールのリンクから開かれた場合、Supabase側が「PASSWORD_RECOVERY」イベントを発火する。
@@ -1630,6 +1665,9 @@ function app() {
     // 会計・帳簿(会計担当者専用)
     financeSettings: { monthlyFee: 3000 },
     clubSettings: { bandUrl: '', bandLiveUrl: '' },
+    // ---------------- プッシュ通知 ----------------
+    notificationPrefs: { announcements: true, schedule: true, results: true },
+    pushSubscribed: false, notificationMessage: '', notificationBusy: false,
     feePayments: [],
     feeYear: 2026, feeMonth: 7, // 0=1月 なので 7=8月
     financeEntries: [],
@@ -1714,6 +1752,7 @@ function app() {
       await this.fetchGamesFromSupabase();
       await this.fetchClubSettingsFromSupabase();
       await this.fetchAnnouncementsFromSupabase();
+      await this.fetchNotificationStateFromSupabase();
       // 会計担当者・管理者以外は会計タブ自体を開けないため、無駄なフェッチを避ける
       if (this.currentUser.role === 'admin' || this.currentUser.canManageFinance) {
         await this.fetchFinanceFromSupabase();
@@ -2897,6 +2936,97 @@ function app() {
       // 誤タップでの配信開始を防ぐため、Bandアプリを開く前に一段階確認する
       if (!confirm('動画配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
       window.open(this.clubSettings.bandLiveUrl, '_blank');
+    },
+
+    // ================= プッシュ通知 =================
+    // VAPID公開鍵(base64url文字列)をpushManager.subscribeが要求するUint8Array形式に変換する
+    _urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    },
+    // ログイン後、この端末がすでに通知を購読済みかどうか・通知設定を取得する
+    async fetchNotificationStateFromSupabase() {
+      if (!this.currentUser) return;
+      const { data: prefRow } = await sb.from('notification_preferences').select('*').eq('user_id', this.currentUser.id).maybeSingle();
+      this.notificationPrefs = {
+        announcements: prefRow ? prefRow.notify_announcements : true,
+        schedule: prefRow ? prefRow.notify_schedule : true,
+        results: prefRow ? prefRow.notify_results : true,
+      };
+      this.pushSubscribed = false;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        this.pushSubscribed = !!sub;
+      } catch (e) { /* 未対応ブラウザ等は静かに無視 */ }
+    },
+    // 「通知を有効にする」: 通知の許可を求め、Service Workerを登録し、購読情報をSupabaseへ保存する
+    async enablePushNotifications() {
+      this.notificationMessage = '';
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        this.notificationMessage = 'お使いのブラウザはプッシュ通知に対応していません(iPhoneの場合はホーム画面に追加してから開き直してください)。';
+        return;
+      }
+      this.notificationBusy = true;
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          this.notificationMessage = '通知が許可されませんでした。ブラウザの設定から通知を許可してください。';
+          return;
+        }
+        const reg = await navigator.serviceWorker.register('sw.js');
+        await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: this._urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          });
+        }
+        const json = sub.toJSON();
+        const { error } = await sb.from('push_subscriptions').upsert({
+          user_id: this.currentUser.id, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth,
+        }, { onConflict: 'endpoint' });
+        if (error) { this.notificationMessage = '通知の登録に失敗しました。'; console.error(error); return; }
+        this.pushSubscribed = true;
+        this.notificationMessage = 'この端末で通知を有効にしました。';
+      } finally {
+        this.notificationBusy = false;
+      }
+    },
+    // 「通知を無効にする」: この端末の購読を解除する
+    async disablePushNotifications() {
+      this.notificationMessage = '';
+      this.notificationBusy = true;
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration();
+          const sub = reg ? await reg.pushManager.getSubscription() : null;
+          if (sub) {
+            const endpoint = sub.endpoint;
+            await sub.unsubscribe();
+            await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+          }
+        }
+        this.pushSubscribed = false;
+        this.notificationMessage = 'この端末の通知を無効にしました。';
+      } finally {
+        this.notificationBusy = false;
+      }
+    },
+    // 項目ごとのオン/オフを保存する
+    async updateNotificationPref(key) {
+      if (!this.currentUser) return;
+      const { error } = await sb.from('notification_preferences').upsert({
+        user_id: this.currentUser.id,
+        notify_announcements: this.notificationPrefs.announcements,
+        notify_schedule: this.notificationPrefs.schedule,
+        notify_results: this.notificationPrefs.results,
+      }, { onConflict: 'user_id' });
+      if (error) { alert('通知設定の保存に失敗しました。'); console.error(error); }
     },
     extractYouTubeId(url) {
       if (!url) return null;
