@@ -252,6 +252,15 @@
           <span class="text-2xl">📜</span>
           <span class="text-sm font-bold text-slate-800">クラブ規約</span>
         </button>
+        <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
+        <button x-show="clubSettings.bandUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+          <span class="text-2xl">📡</span>
+          <span class="text-sm font-bold text-slate-800">Bandで配信する</span>
+        </button>
+        <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+          <span class="text-2xl">▶</span>
+          <span class="text-sm font-bold text-slate-800">Bandを見る</span>
+        </button>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -584,12 +593,6 @@
       <div id="video-menu" class="bg-white rounded-2xl shadow-sm p-4">
         <h3 class="font-bold text-sm mb-1">🎥 動画・ライブ配信</h3>
         <p class="text-[11px] text-slate-400 mb-3">配信の開始・終了は「配信管理」権限を持つ方が操作できます。会場にいる配信担当の方がスマホでライブ配信を始めてください。</p>
-
-        <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える) -->
-        <div x-show="clubSettings.bandUrl" class="flex gap-2 mb-3">
-          <button @click="openBandBroadcast()" type="button" class="tap-btn flex-1 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg">📡 Bandで配信する</button>
-          <button @click="openBandWatch()" type="button" class="tap-btn flex-1 bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-lg">▶ Bandを見る</button>
-        </div>
 
         <div class="space-y-2">
           <template x-for="g in games.slice().sort((a,b)=>b.date.localeCompare(a.date))" :key="'media_'+g.id">
