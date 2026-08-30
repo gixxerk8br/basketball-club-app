@@ -249,6 +249,8 @@
       </nav>
 
       <div class="flex items-center gap-2 shrink-0">
+        <!-- 個人設定(通知など)。管理者専用の⚙️管理画面とは別に、全メンバーが使える -->
+        <button @click="showSettingsModal=true" class="tap-btn text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0">🔔</button>
         <!-- スマホ用: 管理画面はボトムナビに入りきらないため、ここにも入口を用意 -->
         <button x-show="isAdmin" @click="activeTab='admin'" class="tap-btn md:hidden text-lg border border-slate-200 rounded-lg w-9 h-9 flex items-center justify-center shrink-0"
           :class="activeTab==='admin' ? 'bg-violet-100' : ''">⚙️</button>
@@ -292,9 +294,8 @@
         </button>
       </template>
 
-      <!-- クイックアクセス: 上段にBand関連をまとめ、クラブ規約は右下に配置(カテゴリでわかりやすく) -->
+      <!-- クイックアクセス: Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
       <div class="grid grid-cols-2 gap-3">
-        <!-- Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
         <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
           <span class="text-2xl">📡</span>
           <span class="text-sm font-bold text-slate-800">Bandで配信する</span>
@@ -303,42 +304,6 @@
           <span class="text-2xl">▶</span>
           <span class="text-sm font-bold text-slate-800">Bandを見る</span>
         </button>
-        <button @click="showBylawsModal=true" type="button" class="tap-btn col-start-2 bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
-          <span class="text-2xl">📜</span>
-          <span class="text-sm font-bold text-slate-800">クラブ規約</span>
-        </button>
-      </div>
-
-      <!-- 通知設定(端末ごと・項目ごとにオン/オフできる) -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <h3 class="font-bold text-sm mb-1">🔔 通知設定</h3>
-        <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
-
-        <button x-show="!pushSubscribed" @click="enablePushNotifications()" :disabled="notificationBusy" type="button"
-          class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition disabled:opacity-50">
-          この端末で通知を有効にする
-        </button>
-
-        <div x-show="pushSubscribed" class="space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-sm">📢 お知らせ</span>
-            <input type="checkbox" x-model="notificationPrefs.announcements" @change="updateNotificationPref('announcements')">
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-sm">🗓️ スケジュール</span>
-            <input type="checkbox" x-model="notificationPrefs.schedule" @change="updateNotificationPref('schedule')">
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-sm">🏆 試合結果</span>
-            <input type="checkbox" x-model="notificationPrefs.results" @change="updateNotificationPref('results')">
-          </div>
-          <button @click="disablePushNotifications()" :disabled="notificationBusy" type="button"
-            class="tap-btn w-full text-center text-xs text-slate-400 hover:text-red-500 underline mt-2">
-            この端末の通知を無効にする
-          </button>
-        </div>
-
-        <p x-show="notificationMessage" x-text="notificationMessage" class="text-xs text-slate-600 mt-2"></p>
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm p-5">
@@ -1515,6 +1480,55 @@
   </div>
 </div>
 
+<!-- モーダル: 個人設定(通知など。管理者専用の⚙️管理画面とは別に、全メンバーが使える) -->
+<div x-show="showSettingsModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h3 class="font-bold">🔔 個人設定・通知</h3>
+      <button @click="showSettingsModal=false" class="tap-btn text-slate-400 text-lg leading-none">✕</button>
+    </div>
+
+    <div>
+      <h4 class="font-bold text-sm mb-1">通知設定</h4>
+      <p class="text-[11px] text-slate-400 mb-3">お知らせ・スケジュール・試合結果が更新されたときに、この端末へ通知を送ります。iPhoneの場合は、あらかじめホーム画面に追加してからお使いください。</p>
+
+      <button x-show="!pushSubscribed" @click="enablePushNotifications()" :disabled="notificationBusy" type="button"
+        class="tap-btn w-full bg-violet-700 hover:bg-violet-800 text-white font-semibold py-2.5 rounded-lg text-sm transition disabled:opacity-50">
+        この端末で通知を有効にする
+      </button>
+
+      <div x-show="pushSubscribed" class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm">📢 お知らせ</span>
+          <input type="checkbox" x-model="notificationPrefs.announcements" @change="updateNotificationPref('announcements')">
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm">🗓️ スケジュール</span>
+          <input type="checkbox" x-model="notificationPrefs.schedule" @change="updateNotificationPref('schedule')">
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm">🏆 試合結果</span>
+          <input type="checkbox" x-model="notificationPrefs.results" @change="updateNotificationPref('results')">
+        </div>
+        <button @click="disablePushNotifications()" :disabled="notificationBusy" type="button"
+          class="tap-btn w-full text-center text-xs text-slate-400 hover:text-red-500 underline mt-2">
+          この端末の通知を無効にする
+        </button>
+      </div>
+
+      <p x-show="notificationMessage" x-text="notificationMessage" class="text-xs text-slate-600 mt-2"></p>
+    </div>
+
+    <div class="pt-2 border-t border-slate-100">
+      <button @click="showSettingsModal=false; showBylawsModal=true" type="button"
+        class="tap-btn w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-2 text-left">
+        <span class="text-2xl">📜</span>
+        <span class="text-sm font-bold text-slate-800">クラブ規約</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- モーダル: ライブ配信URLの設定(誰でも操作可) -->
 <div x-show="showLiveSetupModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
   <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
@@ -1639,7 +1653,7 @@ function app() {
     newPlayerNumber: '', newPlayerName: '',
     statsEventKey: '', liveGameId: '', currentQuarter: 0, selectedPlayerId: null, statMessage: '', newStatsOpponentInput: '',
     showAnnouncementModal:false, editingAnnouncement:{},
-    showBylawsModal:false,
+    showBylawsModal:false, showSettingsModal:false,
     bylawsArticles: [
       { num:'第1条', title:'名称', body:'本会は、「志免南ワイルドキャッツ」と称する。' },
       { num:'第2条', title:'会員', body:'本会の目的に賛同する者をもって構成する。' },
