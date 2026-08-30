@@ -1,7 +1,10 @@
 // WILD CATS活動管理アプリ: プッシュ通知を送信するEdge Function
 //
-// announcements テーブルへの新規INSERTをきっかけに、Postgresのトリガー
-// (supabase/2026-08-30f_push_trigger.sql、別途手元で用意)から呼び出される想定。
+// 以下のPostgresトリガー(supabase/2026-08-30f_push_trigger.sql、別途手元で用意)から
+// { kind: 'announcement'|'schedule'|'results', record: {...} } の形で呼び出される想定。
+//   - announcements への新規INSERT (kind: 'announcement')
+//   - schedule_days への更新(既存日程の変更のみ。一括取り込み等での大量通知を避けるためINSERTは対象外) (kind: 'schedule')
+//   - games の finished が false→true になった更新(試合終了時のみ) (kind: 'results')
 //
 // 必要な環境変数(Supabaseダッシュボード or `supabase secrets set` で設定):
 //   VAPID_PUBLIC_KEY   … index.htmlのVAPID_PUBLIC_KEYと同じ値
@@ -19,6 +22,32 @@ const TRIGGER_SECRET = Deno.env.get("TRIGGER_SECRET")!;
 
 webpush.setVapidDetails("mailto:admin@example.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+// kindごとに「通知設定のどの列を見るか」「通知の文面をどう組み立てるか」を定義する
+function buildNotification(kind: string, record: Record<string, unknown>) {
+  if (kind === "schedule") {
+    const dayType = (record.day_type as string) || "予定";
+    const eventName = record.event_name as string | null;
+    const place = record.place as string | null;
+    const date = (record.date as string) || "";
+    const title = "🗓️ スケジュールが更新されました";
+    const body = `${date} ${dayType}${eventName ? "(" + eventName + ")" : ""}${place ? " @" + place : ""}`;
+    return { prefColumn: "notify_schedule", title, body };
+  }
+  if (kind === "results") {
+    const quarters = (record.quarters as { home: number; away: number }[]) || [];
+    const home = quarters.reduce((s, q) => s + (q.home || 0), 0);
+    const away = quarters.reduce((s, q) => s + (q.away || 0), 0);
+    const opponent = (record.opponent as string) || "対戦相手";
+    const title = `🏆 試合結果: vs ${opponent}`;
+    const body = `${home} - ${away}${home > away ? "(勝利)" : home < away ? "(敗北)" : "(引き分け)"}`;
+    return { prefColumn: "notify_results", title, body };
+  }
+  // デフォルトはお知らせ扱い
+  const title = record.urgent ? `🚨 ${record.title || "お知らせ"}` : ((record.title as string) || "WILD CATS 新着のお知らせ");
+  const body = (record.body as string) || "";
+  return { prefColumn: "notify_announcements", title, body };
+}
+
 Deno.serve(async (req) => {
   // Postgresのトリガー以外(第三者)から呼ばれないよう、合言葉を確認する
   if (req.headers.get("x-trigger-secret") !== TRIGGER_SECRET) {
@@ -27,9 +56,8 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json();
+    const kind = payload.kind || "announcement";
     const record = payload.record ?? {};
-    const title = record.urgent ? `🚨 ${record.title || "お知らせ"}` : (record.title || "WILD CATS 新着のお知らせ");
-    const body = record.body || "";
 
     // service_role権限でDBへ直接アクセスする(RLSをバイパスして全員分の購読・設定を読む必要があるため)
     const headers = {
@@ -38,9 +66,24 @@ Deno.serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // 「お知らせ」の通知を明示的にオフにしている人のuser_idを集める
+    // 試合結果(kind: 'results')は、games行にスコアが無く別テーブル(game_live_stats)に
+    // あるため、通知文を組み立てる前にここで取得してrecordへ合成しておく
+    if (kind === "results" && record.id) {
+      const statsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_live_stats?game_id=eq.${record.id}&select=quarters`,
+        { headers },
+      );
+      if (statsRes.ok) {
+        const statsRows: { quarters: unknown }[] = await statsRes.json();
+        if (statsRows[0]) record.quarters = statsRows[0].quarters;
+      }
+    }
+
+    const { prefColumn, title, body } = buildNotification(kind, record);
+
+    // この項目の通知を明示的にオフにしている人のuser_idを集める
     const offRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/notification_preferences?notify_announcements=eq.false&select=user_id`,
+      `${SUPABASE_URL}/rest/v1/notification_preferences?${prefColumn}=eq.false&select=user_id`,
       { headers },
     );
     if (!offRes.ok) throw new Error(`notification_preferences fetch failed (${offRes.status}): ${await offRes.text()}`);
@@ -80,7 +123,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ sent: targets.length - toDelete.length, removed: toDelete.length }),
+      JSON.stringify({ kind, sent: targets.length - toDelete.length, removed: toDelete.length }),
       { headers: { "Content-Type": "application/json" } },
     );
   } catch (e) {
