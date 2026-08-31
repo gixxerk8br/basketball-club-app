@@ -294,17 +294,11 @@
         </button>
       </template>
 
-      <!-- クイックアクセス: Bandへのショートカット(承認済みメンバーなら誰でも使える。試合の有無に関わらず常に使える) -->
-      <div class="grid grid-cols-2 gap-3">
-        <button x-show="clubSettings.bandLiveUrl" @click="openBandBroadcast()" type="button" class="tap-btn bg-[#00c73c] rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
-          <span class="text-2xl">📡</span>
-          <span class="text-sm font-bold text-white">Bandで配信する</span>
-        </button>
-        <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn bg-[#00c73c] rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
-          <span class="text-2xl">▶</span>
-          <span class="text-sm font-bold text-white">Bandを見る</span>
-        </button>
-      </div>
+      <!-- クイックアクセス: Bandへのショートカット(承認済みメンバーなら誰でも使える。LIVE視聴・配信ともBandグループを開いて操作する) -->
+      <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn w-full bg-[#00c73c] rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
+        <span class="text-2xl">▶</span>
+        <span class="text-sm font-bold text-white">Bandで配信する・見る</span>
+      </button>
 
       <div class="bg-yellow-100 rounded-2xl shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
@@ -1132,16 +1126,11 @@
       <div class="bg-white rounded-2xl shadow-sm p-5 space-y-3">
         <div>
           <h3 class="font-bold text-sm mb-1">⚙️ クラブ設定</h3>
-          <p class="text-xs text-slate-400">ホーム画面の「Bandで配信する」「Bandを見る」ボタンで開くリンクを設定します。</p>
+          <p class="text-xs text-slate-400">ホーム画面の「Bandで配信する・見る」ボタンで開くリンクを設定します。</p>
         </div>
         <div>
-          <label class="text-xs font-medium text-slate-500">BandグループのURL(「Bandを見る」用)</label>
+          <label class="text-xs font-medium text-slate-500">BandグループのURL</label>
           <input type="url" x-model="clubSettings.bandUrl" @change="updateBandUrl()" placeholder="https://www.band.us/band/XXXXXXX/post"
-            class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="text-xs font-medium text-slate-500">Bandライブ配信作成URL(「Bandで配信する」用)</label>
-          <input type="url" x-model="clubSettings.bandLiveUrl" @change="updateBandLiveUrl()" placeholder="https://www.band.us/band/XXXXXXX/create-live"
             class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
         </div>
       </div>
@@ -1707,7 +1696,7 @@ function app() {
     newOpponentInput:'',
     // 会計・帳簿(会計担当者専用)
     financeSettings: { monthlyFee: 3000 },
-    clubSettings: { bandUrl: '', bandLiveUrl: '' },
+    clubSettings: { bandUrl: '' },
     // ---------------- プッシュ通知 ----------------
     notificationPrefs: { announcements: true, schedule: true, results: true },
     pushSubscribed: false, notificationMessage: '', notificationBusy: false,
@@ -1816,7 +1805,7 @@ function app() {
     async fetchClubSettingsFromSupabase() {
       const { data, error } = await sb.from('club_settings').select('*').maybeSingle();
       if (error) { console.error('クラブ設定の取得に失敗しました', error); return; }
-      this.clubSettings = { bandUrl: (data && data.band_url) || '', bandLiveUrl: (data && data.band_live_url) || '' };
+      this.clubSettings = { bandUrl: (data && data.band_url) || '' };
     },
     // 2026-08-28: スケジュール・出欠・配車をSupabaseから取得する(フェーズ3で予定・出欠、
     // フェーズ4で配車を追加)。今までどおりの scheduleDays[] の形に組み立てるため、
@@ -3019,24 +3008,16 @@ function app() {
     // ---- ライブ配信(YouTube Liveは埋め込み再生、それ以外はリンクで開く) ----
     get liveGames() { return this.games.filter(g => g.isLive && g.liveUrl); },
     // ---- Bandへのショートカット(承認済みメンバーなら誰でも使える。管理者がURLを設定) ----
-    // band_url: 「Bandを見る」用(グループのトップページ)。band_live_url: 「Bandで配信する」用(ライブ配信作成画面へ直接ジャンプ)
+    // Band側に「配信作成画面へ直接ジャンプするURL」は存在しない(band_live_urlで試したが
+    // 「サポートが終了した機能」扱いで開けなかった)ため、視聴・配信ともグループのトップページを
+    // 開き、配信する場合はBandアプリ側で手動でLIVEアイコンをタップしてもらう1本のボタンにしている。
     async updateBandUrl() {
       const { error } = await sb.from('club_settings').update({ band_url: this.clubSettings.bandUrl || null }).eq('club_id', CLUB_ID);
       if (error) { alert('Band URLの保存に失敗しました。'); console.error(error); }
     },
-    async updateBandLiveUrl() {
-      const { error } = await sb.from('club_settings').update({ band_live_url: this.clubSettings.bandLiveUrl || null }).eq('club_id', CLUB_ID);
-      if (error) { alert('Bandライブ配信URLの保存に失敗しました。'); console.error(error); }
-    },
     openBandWatch() {
       if (!this.clubSettings.bandUrl) return;
       window.open(this.clubSettings.bandUrl, '_blank');
-    },
-    openBandBroadcast() {
-      if (!this.clubSettings.bandLiveUrl) return;
-      // 誤タップでの配信開始を防ぐため、Bandアプリを開く前に一段階確認する
-      if (!confirm('動画配信を開始しますか?\n(このあとBandアプリ側で配信を開始してください)')) return;
-      window.open(this.clubSettings.bandLiveUrl, '_blank');
     },
 
     // ================= プッシュ通知 =================
