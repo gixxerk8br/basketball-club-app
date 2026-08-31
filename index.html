@@ -30,11 +30,11 @@
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
   .tap-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .tap-btn:active { transform: scale(0.96); }
-  /* 月間カレンダーの月切り替え(スワイプ・‹›ボタン共通)時に、iOSのように軽くスライド+フェードする */
-  @keyframes cal-in-from-right { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes cal-in-from-left { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .cal-slide-next { animation: cal-in-from-right 0.22s ease-out; }
-  .cal-slide-prev { animation: cal-in-from-left 0.22s ease-out; }
+  /* 月間カレンダーの月切り替え(スワイプ・‹›ボタン共通)時に、iOSのようにスライド+フェードする */
+  @keyframes cal-in-from-right { from { transform: translateX(70px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes cal-in-from-left { from { transform: translateX(-70px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .cal-slide-next { animation: cal-in-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+  .cal-slide-prev { animation: cal-in-from-left 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
 </style>
 </head>
 
