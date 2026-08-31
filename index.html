@@ -350,8 +350,8 @@
         <p x-show="isAdmin" class="text-[11px] text-slate-400">日付タップで編集</p>
       </div>
 
-      <!-- 月間カレンダー -->
-      <div class="bg-white rounded-2xl shadow-sm p-4">
+      <!-- 月間カレンダー(横スワイプでも前月・翌月を切り替えられる) -->
+      <div class="bg-white rounded-2xl shadow-sm p-4" @touchstart="calSwipeStart($event)" @touchend="calSwipeEnd($event)">
         <div class="flex items-center justify-between mb-3">
           <button @click="prevMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">‹</button>
           <p class="font-bold text-base" x-text="calendarYear + '年' + (calendarMonth+1) + '月'"></p>
@@ -2429,6 +2429,21 @@ function app() {
     nextMonth() {
       if (this.calendarMonth === 11) { this.calendarMonth = 0; this.calendarYear++; }
       else { this.calendarMonth++; }
+    },
+    // 月間カレンダーの横スワイプで前月・翌月に切り替える(スマホでのタッチ操作向け)
+    calSwipeStart(e) {
+      this._calSwipeX = e.touches[0].clientX;
+      this._calSwipeY = e.touches[0].clientY;
+    },
+    calSwipeEnd(e) {
+      if (this._calSwipeX === undefined) return;
+      const dx = e.changedTouches[0].clientX - this._calSwipeX;
+      const dy = e.changedTouches[0].clientY - this._calSwipeY;
+      // 縦方向の移動が大きい(ページスクロール等)場合は無視し、横方向がはっきりしている場合だけ切り替える
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) this.nextMonth(); else this.prevMonth();
+      }
+      this._calSwipeX = undefined;
     },
     openDayModal(dateStr) {
       const existing = this.getDay(dateStr);
