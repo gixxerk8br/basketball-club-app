@@ -368,7 +368,8 @@
               :class="[cell.inMonth ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-50 opacity-40', cell.date===todayStr ? 'ring-2 ring-violet-600' : '']">
               <span class="text-[11px] font-bold" :class="cell.dow===0 ? 'text-red-400' : cell.dow===6 ? 'text-blue-400' : 'text-slate-500'" x-text="cell.d"></span>
               <span x-show="cell.day && cell.day.duty" class="text-[9px] leading-tight rounded px-1 py-0.5 bg-teal-500 text-white truncate" x-text="cell.day && cell.day.duty"></span>
-              <span x-show="cell.day && cell.day.dayType" class="text-[9px] leading-tight rounded px-1 py-0.5 text-white truncate" :class="dayTypeColor(cell.day && cell.day.dayType)" x-text="cell.day && cell.day.dayType"></span>
+              <!-- 当番に名前が入っていれば基本的に練習の予定なので、「練習」バッジは省略する(当番バッジと重複するため) -->
+              <span x-show="cell.day && cell.day.dayType && !(cell.day.duty && cell.day.dayType==='練習')" class="text-[9px] leading-tight rounded px-1 py-0.5 text-white truncate" :class="dayTypeColor(cell.day && cell.day.dayType)" x-text="cell.day && cell.day.dayType"></span>
               <span x-show="cell.day && (cell.day.eventName || cell.day.memo)" class="text-[9px] leading-tight text-slate-400 truncate" x-text="cell.day && (cell.day.eventName || cell.day.memo)"></span>
             </button>
           </template>
