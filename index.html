@@ -30,6 +30,11 @@
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
   .tap-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .tap-btn:active { transform: scale(0.96); }
+  /* 月間カレンダーの月切り替え(スワイプ・‹›ボタン共通)時に、iOSのように軽くスライド+フェードする */
+  @keyframes cal-in-from-right { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes cal-in-from-left { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .cal-slide-next { animation: cal-in-from-right 0.22s ease-out; }
+  .cal-slide-prev { animation: cal-in-from-left 0.22s ease-out; }
 </style>
 </head>
 
@@ -358,6 +363,7 @@
           <button @click="nextMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">›</button>
         </div>
 
+        <div :class="calAnimClass" @animationend="calAnimClass=''">
         <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-400 mb-1">
           <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
         </div>
@@ -373,6 +379,7 @@
               <span x-show="cell.day && (cell.day.eventName || cell.day.memo)" class="text-[9px] leading-tight text-slate-400 truncate" x-text="cell.day && (cell.day.eventName || cell.day.memo)"></span>
             </button>
           </template>
+        </div>
         </div>
 
         <!-- 凡例 -->
@@ -1693,6 +1700,7 @@ function app() {
     showPlayerDetailModal:false, detailPlayer:null,
     // カレンダー・当番編集
     calendarYear: 2026, calendarMonth: 7, // 0=1月 なので 7=8月
+    calAnimClass: '', // 月切り替え時のスライドアニメーション用(cal-slide-next/cal-slide-prev)
     showDayModal:false,
     editingDay:{ date:'', duty:'', dayType:'', eventName:'', meetPlace:'', meetTime:'', place:'', memo:'', opponents:[], attendance:{}, carpoolResponses:{}, carpoolAssignments:{}, carpoolSpotRiders:[], materials:[] },
     newOpponentInput:'',
@@ -2425,10 +2433,15 @@ function app() {
     prevMonth() {
       if (this.calendarMonth === 0) { this.calendarMonth = 11; this.calendarYear--; }
       else { this.calendarMonth--; }
+      // 再生中でも即切り替わるように、一度空にしてから付け直してアニメーションを再スタートさせる
+      this.calAnimClass = '';
+      this.$nextTick(() => { this.calAnimClass = 'cal-slide-prev'; });
     },
     nextMonth() {
       if (this.calendarMonth === 11) { this.calendarMonth = 0; this.calendarYear++; }
       else { this.calendarMonth++; }
+      this.calAnimClass = '';
+      this.$nextTick(() => { this.calAnimClass = 'cal-slide-next'; });
     },
     // 月間カレンダーの横スワイプで前月・翌月に切り替える(スマホでのタッチ操作向け)
     calSwipeStart(e) {
