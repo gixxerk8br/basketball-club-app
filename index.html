@@ -1290,7 +1290,8 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs font-medium text-slate-500">当番</label>
-          <input type="text" x-model="editingDay.duty" placeholder="例)松本" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <input type="text" x-model="editingDay.duty" @input="if (editingDay.duty && !editingDay.dayType) editingDay.dayType = '練習'"
+            placeholder="例)松本" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
         </div>
 
         <div>
@@ -1303,7 +1304,7 @@
             <option value="練習試合">練習試合</option>
             <option value="休み">休み</option>
           </select>
-          <p class="text-[11px] text-slate-400 mt-1" x-show="!editingDay.dayType && editingDay.duty">種類を選ばなくても、当番が入っていれば「練習」の日として扱われます。</p>
+          <p class="text-[11px] text-slate-400 mt-1" x-show="!editingDay.dayType && editingDay.duty">当番を入力すると自動的に「練習」が選択されます(この日程は選択前に登録されたようです)。</p>
         </div>
 
         <div>
