@@ -31,10 +31,10 @@
   .tap-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .tap-btn:active { transform: scale(0.96); }
   /* 月間カレンダーの月切り替え(スワイプ・‹›ボタン共通)時に、iOSのようにスライド+フェードする */
-  @keyframes cal-in-from-right { from { transform: translateX(70px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes cal-in-from-left { from { transform: translateX(-70px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .cal-slide-next { animation: cal-in-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
-  .cal-slide-prev { animation: cal-in-from-left 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes cal-in-from-right { from { transform: translateX(140px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes cal-in-from-left { from { transform: translateX(-140px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .cal-slide-next { animation: cal-in-from-right 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+  .cal-slide-prev { animation: cal-in-from-left 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
 </style>
 </head>
 
@@ -331,12 +331,12 @@
         <div class="space-y-2">
           <template x-for="ev in agendaEvents.slice(0,3)" :key="ev.date">
             <div class="bg-slate-50 rounded-lg px-3 py-2">
-              <div class="flex items-center justify-between">
-                <div>
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
                   <p class="text-sm font-semibold" x-text="ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
                   <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '')"></p>
                 </div>
-                <span x-show="ev.dayType!=='練習'" class="text-xs font-bold" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
+                <span x-show="ev.dayType!=='練習'" class="text-xs font-bold whitespace-nowrap flex-shrink-0" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
               </div>
               <p x-show="ev.dayType==='練習'" class="text-[11px] mt-1" :class="absenteeNames(ev).length ? 'text-red-500' : 'text-slate-400'">
                 欠席: <span x-text="absenteeNames(ev).length ? absenteeNames(ev).join('、') : 'なし'"></span>
@@ -355,8 +355,8 @@
         <p x-show="isAdmin" class="text-[11px] text-slate-400">日付タップで編集</p>
       </div>
 
-      <!-- 月間カレンダー(横スワイプでも前月・翌月を切り替えられる) -->
-      <div class="bg-white rounded-2xl shadow-sm p-4" @touchstart="calSwipeStart($event)" @touchend="calSwipeEnd($event)">
+      <!-- 月間カレンダー(横スワイプでも前月・翌月を切り替えられる。overflow-hiddenでスライドインを枠内に収める) -->
+      <div class="bg-white rounded-2xl shadow-sm p-4 overflow-hidden" @touchstart="calSwipeStart($event)" @touchend="calSwipeEnd($event)">
         <div class="flex items-center justify-between mb-3">
           <button @click="prevMonth()" class="tap-btn w-9 h-9 rounded-lg bg-slate-100 text-slate-600 font-bold">‹</button>
           <p class="font-bold text-base" x-text="calendarYear + '年' + (calendarMonth+1) + '月'"></p>
