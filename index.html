@@ -331,12 +331,10 @@
         <div class="space-y-2">
           <template x-for="ev in agendaEvents.slice(0,3)" :key="ev.date">
             <div class="bg-slate-50 rounded-lg px-3 py-2">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold" x-text="ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
-                  <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '')"></p>
-                </div>
-                <span x-show="ev.dayType!=='練習'" class="text-xs font-bold whitespace-nowrap flex-shrink-0" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
+              <p class="text-sm font-semibold" x-text="ev.dayType + (ev.eventName ? '(' + ev.eventName + ')' : '') + (ev.opponents.length ? ' vs '+ev.opponents.map(o=>o.name).join('・') : '')"></p>
+              <p class="text-xs text-slate-400" x-text="ev.date + (ev.meetTime ? ' ' + ev.meetTime + '集合' : '') + (ev.meetPlace ? '(' + ev.meetPlace + ')' : '')"></p>
+              <div x-show="ev.dayType!=='練習'" class="flex justify-end mt-1">
+                <span class="text-xs font-bold whitespace-nowrap" x-text="myEventAttendance(ev)==='yes' ? '✅参加' : myEventAttendance(ev)==='no' ? '❌不参加' : '❔未回答'"></span>
               </div>
               <p x-show="ev.dayType==='練習'" class="text-[11px] mt-1" :class="absenteeNames(ev).length ? 'text-red-500' : 'text-slate-400'">
                 欠席: <span x-text="absenteeNames(ev).length ? absenteeNames(ev).join('、') : 'なし'"></span>
