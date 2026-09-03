@@ -1000,6 +1000,11 @@
           </template>
           <p x-show="feeRows.length===0" class="text-xs text-slate-400">承認済みのメンバーがいません。</p>
         </div>
+        <!-- 未払いの方だけに個別のプッシュ通知を送る(手動送信。会計担当者の判断でいつでも押せる) -->
+        <button x-show="feeSummary.unpaidCount>0" @click="sendFeeReminders()" type="button"
+          class="tap-btn w-full mt-3 bg-amber-500 text-white text-xs font-bold py-2.5 rounded-lg">
+          📢 未払いの方に通知を送る(<span x-text="feeSummary.unpaidCount"></span>名)
+        </button>
       </div>
 
       <!-- 帳簿(収入・支出の記録) -->
@@ -2952,6 +2957,17 @@ function app() {
       if (error) { if (!silent) alert('取消に失敗しました。'); console.error(error); return; }
       this.feePayments = this.feePayments.filter(p => !(p.memberId === memberId && p.period === this.feePeriod));
       this.financeEntries = this.financeEntries.filter(e => !removedIds.includes(e.linkedFeePaymentId));
+    },
+    // 未払いの方だけに個別のプッシュ通知を送る(fee_remindersへ1人1行INSERTすると、
+    // Postgresトリガー経由でその人だけにEdge Functionから通知が飛ぶ仕組み)
+    async sendFeeReminders() {
+      const unpaid = this.feeRows.filter(r => !r.paid);
+      if (!unpaid.length) return;
+      if (!confirm(`未払いの${unpaid.length}名に通知を送りますか?`)) return;
+      const rows = unpaid.map(r => ({ user_id: r.memberId, period: this.feePeriod }));
+      const { error } = await sb.from('fee_reminders').insert(rows);
+      if (error) { alert('通知の送信に失敗しました。'); console.error(error); return; }
+      alert(unpaid.length + '名に通知を送信しました。');
     },
 
     // ---- 帳簿(収入・支出) ----

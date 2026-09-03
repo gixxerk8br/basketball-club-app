@@ -1,10 +1,13 @@
 // WILD CATS活動管理アプリ: プッシュ通知を送信するEdge Function
 //
 // 以下のPostgresトリガー(supabase/2026-08-30f_push_trigger.sql、別途手元で用意)から
-// { kind: 'announcement'|'schedule'|'results', record: {...} } の形で呼び出される想定。
+// { kind: 'announcement'|'schedule'|'results'|'fee_reminder', record: {...} } の形で呼び出される想定。
 //   - announcements への新規INSERT (kind: 'announcement')
 //   - schedule_days への更新(既存日程の変更のみ。一括取り込み等での大量通知を避けるためINSERTは対象外) (kind: 'schedule')
 //   - games の finished が false→true になった更新(試合終了時のみ) (kind: 'results')
+//   - fee_reminders への新規INSERT (kind: 'fee_reminder')。会計担当者が会計画面から
+//     手動で送信する、会費未納者1人ずつへの個別通知(record.user_id宛のみに送る。
+//     他の3種と違い全体配信ではないため、通知カテゴリのON/OFF設定の対象外)
 //
 // 必要な環境変数(Supabaseダッシュボード or `supabase secrets set` で設定):
 //   VAPID_PUBLIC_KEY   … index.htmlのVAPID_PUBLIC_KEYと同じ値
@@ -22,8 +25,15 @@ const TRIGGER_SECRET = Deno.env.get("TRIGGER_SECRET")!;
 
 webpush.setVapidDetails("mailto:admin@example.com", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
-// kindごとに「通知設定のどの列を見るか」「通知の文面をどう組み立てるか」を定義する
+// kindごとに「通知設定のどの列を見るか」「通知の文面をどう組み立てるか」を定義する。
+// fee_reminderだけは全体配信ではなく特定の1人(targetUserId)宛のため、prefColumnはnull。
 function buildNotification(kind: string, record: Record<string, unknown>) {
+  if (kind === "fee_reminder") {
+    const period = (record.period as string) || "今月";
+    const title = "💰 会費のお支払いのお願い";
+    const body = `${period}分の会費がまだ確認できていません。ご確認をお願いします。`;
+    return { targetUserId: record.user_id as string, prefColumn: null, title, body };
+  }
   if (kind === "schedule") {
     const dayType = (record.day_type as string) || "予定";
     const eventName = record.event_name as string | null;
@@ -31,7 +41,7 @@ function buildNotification(kind: string, record: Record<string, unknown>) {
     const date = (record.date as string) || "";
     const title = "🗓️ スケジュールが更新されました";
     const body = `${date} ${dayType}${eventName ? "(" + eventName + ")" : ""}${place ? " @" + place : ""}`;
-    return { prefColumn: "notify_schedule", title, body };
+    return { targetUserId: null, prefColumn: "notify_schedule", title, body };
   }
   if (kind === "results") {
     const quarters = (record.quarters as { home: number; away: number }[]) || [];
@@ -40,12 +50,12 @@ function buildNotification(kind: string, record: Record<string, unknown>) {
     const opponent = (record.opponent as string) || "対戦相手";
     const title = `🏆 試合結果: vs ${opponent}`;
     const body = `${home} - ${away}${home > away ? "(勝利)" : home < away ? "(敗北)" : "(引き分け)"}`;
-    return { prefColumn: "notify_results", title, body };
+    return { targetUserId: null, prefColumn: "notify_results", title, body };
   }
   // デフォルトはお知らせ扱い
   const title = record.urgent ? `🚨 ${record.title || "お知らせ"}` : ((record.title as string) || "WILD CATS 新着のお知らせ");
   const body = (record.body as string) || "";
-  return { prefColumn: "notify_announcements", title, body };
+  return { targetUserId: null, prefColumn: "notify_announcements", title, body };
 }
 
 Deno.serve(async (req) => {
@@ -79,23 +89,35 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { prefColumn, title, body } = buildNotification(kind, record);
+    const { targetUserId, prefColumn, title, body } = buildNotification(kind, record);
 
-    // この項目の通知を明示的にオフにしている人のuser_idを集める
-    const offRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/notification_preferences?${prefColumn}=eq.false&select=user_id`,
-      { headers },
-    );
-    if (!offRes.ok) throw new Error(`notification_preferences fetch failed (${offRes.status}): ${await offRes.text()}`);
-    const offRows: { user_id: string }[] = await offRes.json();
-    const offUserIds = new Set(offRows.map((r) => r.user_id));
+    let targets: { user_id: string; endpoint: string; p256dh: string; auth: string }[];
+    if (targetUserId) {
+      // 個人宛(fee_reminder): その人が登録している端末の購読だけを取得する。
+      // カテゴリ設定(notification_preferences)は見ない=オフにしていても届く(会計上重要な通知のため)
+      const subRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${targetUserId}&select=*`,
+        { headers },
+      );
+      if (!subRes.ok) throw new Error(`push_subscriptions fetch failed (${subRes.status}): ${await subRes.text()}`);
+      targets = await subRes.json();
+    } else {
+      // 全体配信(announcement/schedule/results): この項目の通知を明示的にオフにしている人のuser_idを集める
+      const offRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/notification_preferences?${prefColumn}=eq.false&select=user_id`,
+        { headers },
+      );
+      if (!offRes.ok) throw new Error(`notification_preferences fetch failed (${offRes.status}): ${await offRes.text()}`);
+      const offRows: { user_id: string }[] = await offRes.json();
+      const offUserIds = new Set(offRows.map((r) => r.user_id));
 
-    // 登録されている購読(端末)を全件取得し、オフにしている人を除外する
-    // (notification_preferencesに行が無い人は「初期値=オン」として扱う)
-    const subRes = await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?select=*`, { headers });
-    if (!subRes.ok) throw new Error(`push_subscriptions fetch failed (${subRes.status}): ${await subRes.text()}`);
-    const subs: { user_id: string; endpoint: string; p256dh: string; auth: string }[] = await subRes.json();
-    const targets = subs.filter((s) => !offUserIds.has(s.user_id));
+      // 登録されている購読(端末)を全件取得し、オフにしている人を除外する
+      // (notification_preferencesに行が無い人は「初期値=オン」として扱う)
+      const subRes = await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?select=*`, { headers });
+      if (!subRes.ok) throw new Error(`push_subscriptions fetch failed (${subRes.status}): ${await subRes.text()}`);
+      const subs: { user_id: string; endpoint: string; p256dh: string; auth: string }[] = await subRes.json();
+      targets = subs.filter((s) => !offUserIds.has(s.user_id));
+    }
 
     const results = await Promise.allSettled(
       targets.map((s) =>
