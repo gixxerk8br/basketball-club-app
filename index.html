@@ -284,21 +284,6 @@
 
     <!-- ================= ホーム ================= -->
     <section x-show="activeTab==='home'" class="space-y-5">
-      <!-- ライブ配信中バナー -->
-      <template x-for="g in liveGames" :key="'livebanner_'+g.id">
-        <button @click="activeTab='results'" type="button"
-          class="tap-btn w-full bg-red-500 text-white rounded-xl px-4 py-3 text-sm flex items-center justify-between">
-          <span class="font-bold flex items-center gap-2">
-            <span class="relative flex h-2.5 w-2.5">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
-            </span>
-            ただいまライブ配信中: vs <span x-text="g.opponent"></span>
-          </span>
-          <span class="text-xs underline whitespace-nowrap">見る →</span>
-        </button>
-      </template>
-
       <!-- クイックアクセス: Bandへのショートカット(承認済みメンバーなら誰でも使える。LIVE視聴・配信ともBandグループを開いて操作する) -->
       <button x-show="clubSettings.bandUrl" @click="openBandWatch()" type="button" class="tap-btn w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2 text-left">
         <img src="assets/band-icon.png" alt="" class="w-8 h-8 rounded-lg">
@@ -630,52 +615,26 @@
         <button x-show="isAdmin" @click="openGameModal()" class="tap-btn bg-violet-700 text-white text-sm font-semibold px-3 py-2 rounded-lg">+ 試合を追加</button>
       </div>
 
-      <div class="space-y-5">
+      <div class="space-y-4">
         <template x-for="grp in gamesByTournament" :key="grp.label">
-          <div>
-            <div class="flex items-center justify-between px-1 mb-2">
-              <h3 class="font-bold text-sm text-slate-600" x-text="grp.label"></h3>
-              <span class="text-[11px] text-slate-400" x-text="grp.wins+'勝'+grp.losses+'敗'+(grp.draws?' '+grp.draws+'分':'')"></span>
+          <div class="rounded-2xl bg-violet-50 border border-violet-100 p-3">
+            <div class="flex items-center justify-between px-1 mb-2.5">
+              <h3 class="font-bold text-sm text-violet-900" x-text="grp.label"></h3>
+              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-violet-700 whitespace-nowrap" x-text="grp.wins+'勝'+grp.losses+'敗'+(grp.draws?' '+grp.draws+'分':'')"></span>
             </div>
-            <div class="space-y-3">
+            <div class="space-y-2.5">
               <template x-for="g in grp.games" :key="g.id">
-                <div class="bg-white rounded-2xl shadow-sm p-4" :id="'game_'+g.id">
+                <div class="bg-white rounded-xl shadow-sm p-4" :id="'game_'+g.id">
                   <div class="flex items-start justify-between">
                     <div>
                       <p class="text-xs text-slate-400" x-text="g.date + '  📍' + g.place"></p>
                       <p class="font-bold mt-1">自チーム <span class="text-violet-800" x-text="teamScore(g)"></span>
                         - <span class="text-slate-500" x-text="oppScore(g)"></span> <span x-text="g.opponent"></span></p>
                     </div>
-                    <div class="flex flex-col items-end gap-1">
-                      <div class="flex gap-2" x-show="isAdmin">
-                        <button @click="openGameModal(g)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
-                        <button @click="deleteGame(g.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
-                      </div>
-                      <!-- ライブ配信の開始/終了は「配信管理」権限を持つメンバー(管理者含む)のみ操作可能 -->
-                      <button x-show="isLiveManager && g.liveUrl" @click="toggleGameLive(g.id)" class="tap-btn text-[11px] font-bold px-2 py-1 rounded-lg whitespace-nowrap"
-                        :class="g.isLive ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'"
-                        x-text="g.isLive ? '🔴 配信終了にする' : '配信を開始する'"></button>
+                    <div class="flex gap-2" x-show="isAdmin">
+                      <button @click="openGameModal(g)" class="tap-btn text-xs text-slate-400 hover:text-violet-700">編集</button>
+                      <button @click="deleteGame(g.id)" class="tap-btn text-xs text-slate-400 hover:text-red-500">削除</button>
                     </div>
-                  </div>
-
-                  <!-- ライブ配信 -->
-                  <div x-show="g.isLive && g.liveUrl" class="mt-3">
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="relative flex h-2.5 w-2.5">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-                      </span>
-                      <span class="text-xs font-bold text-red-500">LIVE配信中</span>
-                    </div>
-                    <template x-if="isYouTubeUrl(g.liveUrl)">
-                      <div class="aspect-video rounded-lg overflow-hidden bg-black">
-                        <iframe :src="youtubeEmbedUrl(g.liveUrl)" class="w-full h-full" frameborder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                      </div>
-                    </template>
-                    <template x-if="!isYouTubeUrl(g.liveUrl)">
-                      <a :href="g.liveUrl" target="_blank" class="tap-btn block text-center bg-red-500 text-white text-sm font-bold py-2.5 rounded-lg">🔴 ライブ配信を見る(外部アプリで開きます)</a>
-                    </template>
                   </div>
 
                   <!-- クォーター別(電光掲示板風) -->
@@ -703,11 +662,9 @@
                     </table>
                   </div>
 
-                  <div class="flex gap-2 mt-3">
-                    <a :href="g.videoUrl||'#'" target="_blank" x-show="g.videoUrl"
-                      class="tap-btn flex-1 text-center bg-slate-800 text-white text-xs font-semibold py-2 rounded-lg">▶ 動画を見る</a>
-                    <a :href="g.photoUrl||'#'" target="_blank" x-show="g.photoUrl"
-                      class="tap-btn flex-1 text-center bg-slate-100 text-slate-700 text-xs font-semibold py-2 rounded-lg">🖼 写真ギャラリー</a>
+                  <!-- 動画URL(任意・目立たせすぎない控えめな表示) -->
+                  <div class="mt-2 text-right" x-show="g.videoUrl">
+                    <a :href="g.videoUrl" target="_blank" class="text-[11px] text-slate-400 hover:text-violet-600">🎥 動画を見る</a>
                   </div>
                 </div>
               </template>
@@ -1092,7 +1049,7 @@
       <!-- 役割・権限の設定 -->
       <div class="bg-white rounded-2xl shadow-sm p-5">
         <h3 class="font-bold text-sm mb-1">🔑 役割・権限の設定</h3>
-        <p class="text-xs text-slate-400 mb-3">管理者以外にも、配車の組み立て・会費管理・動画/ライブ配信・スタッツの管理を任せられます。</p>
+        <p class="text-xs text-slate-400 mb-3">管理者以外にも、配車の組み立て・会費管理・スタッツの管理を任せられます。</p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
@@ -1100,7 +1057,6 @@
                 <td class="text-left pb-1">メンバー</td>
                 <td class="text-center pb-1">🚗 配車管理</td>
                 <td class="text-center pb-1">💰 会計担当</td>
-                <td class="text-center pb-1">🎥 配信管理</td>
                 <td class="text-center pb-1">📊 スタッツ管理</td>
               </tr>
             </thead>
@@ -1115,10 +1071,6 @@
                   <td class="text-center">
                     <input type="checkbox" :checked="m.role==='admin' || m.canManageFinance" :disabled="m.role==='admin'"
                       @change="toggleMemberFlag(m.id, 'canManageFinance', $event.target.checked)">
-                  </td>
-                  <td class="text-center">
-                    <input type="checkbox" :checked="m.role==='admin' || m.canManageLive" :disabled="m.role==='admin'"
-                      @change="toggleMemberFlag(m.id, 'canManageLive', $event.target.checked)">
                   </td>
                   <td class="rounded-r-lg text-center">
                     <input type="checkbox" :checked="m.role==='admin' || m.canManageStats" :disabled="m.role==='admin'"
@@ -1555,19 +1507,6 @@
   </div>
 </div>
 
-<!-- モーダル: ライブ配信URLの設定(誰でも操作可) -->
-<div x-show="showLiveSetupModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
-  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3">
-    <h3 class="font-bold" x-text="liveSetupUrl ? '🔴 配信URLを編集' : '🔴 ライブ配信を始める'"></h3>
-    <p class="text-xs text-slate-400">YouTube Live等でライブ配信を開始してから、そのURLを入力してください。YouTube LiveのURLならアプリ内に埋め込み再生されます。それ以外(Band/Instagram等)はリンクとして表示されます。</p>
-    <input type="url" x-model="liveSetupUrl" placeholder="配信URL" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-    <div class="flex gap-2 pt-2">
-      <button @click="showLiveSetupModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
-      <button @click="saveLiveSetup()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-red-500 text-white">🔴 保存して配信</button>
-    </div>
-  </div>
-</div>
-
 <!-- モーダル: 試合の追加・編集 -->
 <div x-show="showGameModal" x-cloak class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-30 p-0 sm:p-4">
   <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
@@ -1577,10 +1516,8 @@
       <input type="date" x-model="editingGame.date" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
       <input type="text" x-model="editingGame.place" placeholder="会場" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
     </div>
-    <input type="url" x-model="editingGame.liveUrl" placeholder="ライブ配信URL(YouTube Live / Band / Instagram等・任意)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-    <p class="text-[11px] text-slate-400">YouTube LiveのURLならアプリ内に動画を埋め込み再生します。それ以外は視聴用リンクとして表示されます。</p>
-    <input type="url" x-model="editingGame.videoUrl" placeholder="試合後の動画URL(ハイライト等)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-    <input type="url" x-model="editingGame.photoUrl" placeholder="写真ギャラリーURL(Googleフォト等)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <!-- ライブ配信はBandに一本化したため、ここでは試合後の動画(YouTube等)だけ任意で残せるようにしている -->
+    <input type="url" x-model="editingGame.videoUrl" placeholder="動画URL(YouTube等・任意)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
     <div class="flex gap-2 pt-2">
       <button @click="showGameModal=false" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-600">キャンセル</button>
       <button @click="saveGame()" class="tap-btn flex-1 py-2.5 rounded-lg text-sm font-semibold bg-violet-700 text-white">保存</button>
@@ -1697,7 +1634,6 @@ function app() {
       { num:'第12条', title:'付記', body:'本規約は平成6年3月1日よりこれを施行する。\n本規約は平成20年3月1日よりこれを施行する。\n本規約は平成28年3月1日よりこれを施行する。\n本規約は令和6年3月1日よりこれを施行する。\n本規約は令和7年3月1日よりこれを施行する。\n本規約は令和8年3月1日よりこれを施行する。' },
     ],
     showGameModal:false, editingGame:{},
-    showLiveSetupModal:false, liveSetupGameId:null, liveSetupUrl:'',
     showPlayerDetailModal:false, detailPlayer:null,
     // カレンダー・当番編集
     calendarYear: 2026, calendarMonth: 7, // 0=1月 なので 7=8月
@@ -2879,7 +2815,6 @@ function app() {
     },
     // ================= 権限設定(管理者のみ操作可) =================
     get isCarpoolManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageCarpool)); },
-    get isLiveManager() { return !!(this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.canManageLive)); },
     get approvedMembers() { return this.members.filter(m => m.status === 'approved'); },
     async toggleMemberFlag(id, flag, checked) {
       const m = this.members.find(m => m.id === id);
@@ -3047,8 +2982,6 @@ function app() {
       return (g.finished ? '' : '途中 ') + home + '-' + away;
     },
 
-    // ---- ライブ配信(YouTube Liveは埋め込み再生、それ以外はリンクで開く) ----
-    get liveGames() { return this.games.filter(g => g.isLive && g.liveUrl); },
     // ---- Bandへのショートカット(承認済みメンバーなら誰でも使える。管理者がURLを設定) ----
     // Band側に「配信作成画面へ直接ジャンプするURL」は存在しない(band_live_urlで試したが
     // 「サポートが終了した機能」扱いで開けなかった)ため、視聴・配信ともグループのトップページを
@@ -3151,50 +3084,6 @@ function app() {
         notify_results: this.notificationPrefs.results,
       }, { onConflict: 'user_id' });
       if (error) { alert('通知設定の保存に失敗しました。'); console.error(error); }
-    },
-    extractYouTubeId(url) {
-      if (!url) return null;
-      const m = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
-      return m ? m[1] : null;
-    },
-    isYouTubeUrl(url) { return !!this.extractYouTubeId(url); },
-    youtubeEmbedUrl(url) {
-      const id = this.extractYouTubeId(url);
-      return id ? ('https://www.youtube.com/embed/' + id + '?autoplay=0') : '';
-    },
-    async toggleGameLive(id) {
-      const g = this.games.find(g => g.id === id);
-      if (!g) return;
-      if (!g.isLive && !g.liveUrl) { this.openLiveSetupModal(id); return; }
-      const { error } = await sb.from('game_media').update({ is_live: !g.isLive }).eq('game_id', id);
-      if (error) { alert('操作に失敗しました。'); console.error(error); return; }
-      g.isLive = !g.isLive;
-    },
-    // ライブ配信の開始・編集・削除は「配信管理」権限を持つメンバー(管理者含む)のみ操作できる。
-    // ボタン自体は isLiveManager で非表示にしているため、この関数はそこに依存している。
-    openLiveSetupModal(gameId) {
-      const g = this.games.find(g => g.id === gameId);
-      this.liveSetupGameId = gameId;
-      this.liveSetupUrl = (g && g.liveUrl) || '';
-      this.showLiveSetupModal = true;
-    },
-    async saveLiveSetup() {
-      const g = this.games.find(g => g.id === this.liveSetupGameId);
-      if (!g || !this.liveSetupUrl) return;
-      const { error } = await sb.from('game_media').update({ live_url: this.liveSetupUrl, is_live: true }).eq('game_id', g.id);
-      if (error) { alert('保存に失敗しました。'); console.error(error); return; }
-      g.liveUrl = this.liveSetupUrl;
-      g.isLive = true;
-      this.showLiveSetupModal = false;
-    },
-    async clearLiveUrl(gameId) {
-      const g = this.games.find(g => g.id === gameId);
-      if (!g) return;
-      if (!confirm('配信URLを削除しますか?配信中の場合は終了扱いになります。')) return;
-      const { error } = await sb.from('game_media').update({ live_url: '', is_live: false }).eq('game_id', gameId);
-      if (error) { alert('削除に失敗しました。'); console.error(error); return; }
-      g.liveUrl = '';
-      g.isLive = false;
     },
 
     // ---- 選手成績の集計・グラフ表示 ----
